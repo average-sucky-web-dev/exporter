@@ -11,6 +11,7 @@ import { FXAAPass } from 'three/examples/jsm/postprocessing/FXAAPass.js';
 import { EmitterGroupDesc } from './emitterGroupDesc';
 import { FLAGS } from '../misc/flags';
 import type { Vec3 } from '../mesh/mesh';
+import { loadCompositMeshes } from './textureComposer';
 
 export class RBXRenderer {
     static isRenderingMesh: Map<Instance,boolean> = new Map()
@@ -33,6 +34,7 @@ export class RBXRenderer {
 
     /**Fully sets up renderer with scene, camera and frame rendering*/
     static fullSetup() {
+        loadCompositMeshes()
         RBXRenderer.create()
         RBXRenderer.setupScene()
         RBXRenderer.setupControls()

@@ -23,18 +23,21 @@ const compositMeshPaths = [
 
 const compositMeshCache = new Map()
 
-for (const meshPath of compositMeshPaths) {
-    compositMeshCache.set(meshPath, new Promise((resolve) => {
-        API.Asset.GetMesh(meshPath).then((result) => {
-            if (result instanceof Response) {
-                throw new Error(`Missing file for composit mesh: ${meshPath}`)
-            } else {
-                const threeGeometry = fileMeshToTHREEGeometry(result)
-                compositMeshCache.set(meshPath, threeGeometry)
-                resolve(threeGeometry)
-            }
-        })
-    }))
+export function loadCompositMeshes() {
+    console.log("Loading composit meshes")
+    for (const meshPath of compositMeshPaths) {
+        compositMeshCache.set(meshPath, new Promise((resolve) => {
+            API.Asset.GetMesh(meshPath).then((result) => {
+                if (result instanceof Response) {
+                    throw new Error(`Missing file for composit mesh: ${meshPath}`)
+                } else {
+                    const threeGeometry = fileMeshToTHREEGeometry(result)
+                    compositMeshCache.set(meshPath, threeGeometry)
+                    resolve(threeGeometry)
+                }
+            })
+        }))
+    }
 }
 
 export async function getCompositGeometry(path: string): Promise<THREE.BufferGeometry> {
