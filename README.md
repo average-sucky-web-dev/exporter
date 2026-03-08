@@ -8,6 +8,10 @@ Also available on npm: https://www.npmjs.com/package/roavatar-renderer
 IMPORTANT: Assets are NOT included in the npm module or this repository, you have to get them from the main RoAvatar repository
 
 Basic (not really) example on how to load an avatar, that is also untested:
+```html
+<!--I know this is kind of terrible but... it has to be included-->
+<script src="/draco_decoder.js"></script>
+```
 ```ts
 //setup instance wrappers and renderer
 RegisterWrappers()
