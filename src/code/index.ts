@@ -91,6 +91,11 @@ export * from "./avatar/sorts"
 
 export * from "./lib/simple-view"
 
+export * from "./mesh/cage-mesh-deform"
+export * from "./mesh/hidden-surface-removal"
+export * from "./mesh/mesh-deform"
+export * from "./mesh/mesh"
+
 export * from "./misc/flags"
 export * from "./misc/misc"
 
