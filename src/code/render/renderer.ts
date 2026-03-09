@@ -12,6 +12,7 @@ import { EmitterGroupDesc } from './emitterGroupDesc';
 import { FLAGS } from '../misc/flags';
 import type { Vec3 } from '../mesh/mesh';
 import { loadCompositMeshes } from './textureComposer';
+import { setupWorkerPool } from '../misc/worker-pool';
 
 export class RBXRenderer {
     static isRenderingMesh: Map<Instance,boolean> = new Map()
@@ -32,12 +33,15 @@ export class RBXRenderer {
 
     static resolution: [number,number] = [420, 420]
 
+    static plane?: THREE.Mesh
+
     /**Fully sets up renderer with scene, camera and frame rendering*/
-    static fullSetup() {
+    static fullSetup(includeScene: boolean = true, includeControls: boolean = true) {
+        setupWorkerPool()
         loadCompositMeshes()
         RBXRenderer.create()
-        RBXRenderer.setupScene()
-        RBXRenderer.setupControls()
+        if (includeScene) RBXRenderer.setupScene()
+        if (includeControls) RBXRenderer.setupControls()
         RBXRenderer.animate()
     }
 
@@ -66,12 +70,13 @@ export class RBXRenderer {
 
     /**Sets up a basic scene with lighting
      * @param lightingType "WellLit" is the default lighting for RoAvatar, "Thumbnail" tries to match the Roblox thumbnail lighting
+     * @param backgroundColorHex is the hex code for the background color, for example 0x2b2d33
     */
-    static setupScene(lightingType: "WellLit" | "Thumbnail" = "WellLit") {
+    static setupScene(lightingType: "WellLit" | "Thumbnail" = "WellLit", backgroundColorHex = 0x2b2d33) {
         //const backgroundColor = new THREE.Color( 0x2C2E31 )
         //const backgroundColor = new THREE.Color( 0x191a1f )
         //const backgroundColor = new THREE.Color( 0x2a2a2d )
-        const backgroundColor = new THREE.Color( 0x2b2d33 )
+        const backgroundColor = new THREE.Color( backgroundColorHex )
         RBXRenderer.scene.background = backgroundColor;
 
         let thumbnailAmbientVal = 138 //138 SHOULD be accurate but its not???, nvm it probably is but there is a second light source, wait i think ambient is more correct to use
@@ -158,6 +163,7 @@ export class RBXRenderer {
         plane.rotation.set(rad(-90),0,0)
         plane.position.set(0,0,0)
         plane.receiveShadow = false;
+        RBXRenderer.plane = plane
         RBXRenderer.scene.add( plane );
     }
 
@@ -175,6 +181,16 @@ export class RBXRenderer {
         RBXRenderer.camera.position.set(RBXRenderer.lookAwayVector[0] * RBXRenderer.lookAwayDistance,3 + RBXRenderer.lookAwayVector[1] * RBXRenderer.lookAwayDistance,RBXRenderer.lookAwayVector[2] * RBXRenderer.lookAwayDistance)
         RBXRenderer.camera.lookAt(new THREE.Vector3(...RBXRenderer.orbitControlsTarget))
         controls.update()
+    }
+
+    /**
+     * @param colorHex example: 0x2b2d33 which is the default
+     */
+    static setBackgroundColor(colorHex: number) {
+        RBXRenderer.scene.background = new THREE.Color( colorHex )
+        if (RBXRenderer.plane) {
+            RBXRenderer.plane.material = new THREE.MeshBasicMaterial({color: colorHex})
+        }
     }
 
     /**Makes the renderer render a new frame on every animationFrame */
@@ -329,6 +345,8 @@ export class RBXRenderer {
 
     static setRendererSize(width: number, height: number) {
         RBXRenderer.renderer.setSize(width, height)
+        RBXRenderer.camera.aspect = width / height
+        RBXRenderer.camera.updateProjectionMatrix()
     }
 
     static getRendererDom() {

@@ -5,7 +5,10 @@ export const FLAGS: {
     ENABLE_API_CACHE: boolean,
     ROAVATAR_DATA_URL: string,
     ROAVATAR_TRYON_PLACE: number,
+    ASSETS_PATH: string,
+    ASSETDELIVERY_V2: boolean,
 
+    USE_WORKERS: boolean,
     ENABLE_LC_WEIGHT_CACHE: boolean,
     INFLATE_LAYERED_CLOTHING: number,
     LAYERED_CLOTHING_ALGORITHM: "linear" | "linearnormal" | "linearnormal2" | "rbf",
@@ -35,8 +38,11 @@ export const FLAGS: {
     ENABLE_API_CACHE: true,
     ROAVATAR_DATA_URL: "rbxassetid://102463700065175", //url of model to load that lists issues with specific versions
     ROAVATAR_TRYON_PLACE: 135979364355750,
+    ASSETS_PATH: "../assets/rbxasset/",
+    ASSETDELIVERY_V2: true,
 
     //layered clothing
+    USE_WORKERS: true,
     ENABLE_LC_WEIGHT_CACHE: true,
     INFLATE_LAYERED_CLOTHING: 0.05, //only used by linear algorithms
     LAYERED_CLOTHING_ALGORITHM: "rbf",

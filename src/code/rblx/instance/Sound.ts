@@ -53,7 +53,11 @@ export class SoundWrapper extends InstanceWrapper {
             }
 
             if (audioUrl && audioUrl.length > 0) {
-                this.data.audio = new Audio(API.Misc.parseAssetString(audioUrl))
+                this.data.audio = new Audio()
+                API.Misc.assetURLToCDNURL(audioUrl).then((url) => {
+                    if (url instanceof Response || !this.data.audio) return
+                    this.data.audio.src = url
+                })
             }
         }
 

@@ -13,9 +13,17 @@ Basic (not really) example on how to load an avatar, that is also untested:
 <script src="/draco_decoder.js"></script>
 ```
 ```ts
+
+//setup flags that are compatible with you environment
+FLAGS.ASSETS_PATH = chrome.runtime.getURL("assets/rbxasset/")
+FLAGS.USE_WORKERS = true //if layered assets dont work set this to false
+
 //setup instance wrappers and renderer
 RegisterWrappers()
 RBXRenderer.fullSetup() //you can alternatively choose to only setup specific parts and do some yourself
+RBXRenderer.setBackgroundColor( 0xffffff )
+RBXRenderer.setRendererSize(1000,500)
+document.body.appendChild(RBXRenderer.getRendererDom())
 
 //get avatar data for the user with id 1
 const outfit = API.Avatar.GetAvatarDetails(1)

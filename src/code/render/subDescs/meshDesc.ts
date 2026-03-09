@@ -601,7 +601,7 @@ export class MeshDesc {
                         if (child2.className === "CharacterMesh") {
                             if (BodyPartNameToEnum[child.Property("Name") as string] === child2.Property("BodyPart")) {
                                 //TODO: check if the other properties are important
-                                characterMeshStr = child2.Property("MeshId") as string
+                                characterMeshStr = "rbxassetid://" + (child2.Property("MeshId") as bigint)
                             }
                         }
                     }

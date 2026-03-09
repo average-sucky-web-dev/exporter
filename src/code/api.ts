@@ -100,7 +100,7 @@ async function RBLXPost(url: string, auth: Authentication, body: any, attempt = 
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function RBLXGet(url: string, headers?: any): Promise<Response> {
+async function RBLXGet(url: string, headers?: any, includeCredentials: boolean = true): Promise<Response> {
     return new Promise((resolve) => {
         let newHeaders: HeadersInit = {
             "Content-Type": "application/json",
@@ -110,11 +110,15 @@ async function RBLXGet(url: string, headers?: any): Promise<Response> {
             newHeaders = {...newHeaders, ...headers}
         }
 
+        if (url.includes("rbxcdn.com")) {
+            includeCredentials = false
+        }
+
         const fetchHeaders = new Headers(newHeaders)
 
         try {
             fetch(url, {
-                credentials: "include",
+                credentials: includeCredentials ? "include" : undefined,
                 headers: fetchHeaders,
             }).then(response => {
                 resolve(response)
@@ -156,7 +160,7 @@ const CACHE = {
     "AssetBuffer": new Map<string,ArrayBuffer>(),
     "RBX": new Map<string,RBX>(),
     "Mesh": new Map<string,FileMesh>(),
-    "Image": new Map<string,HTMLImageElement | undefined>(),
+    "Image": new Map<string,Promise<HTMLImageElement | undefined> | HTMLImageElement | undefined>(),
     "Thumbnails": new Map<string,string | undefined>(),
     "ItemOwned": new Map<string,[boolean,number]>(),
     "IsLayered": new Map<number,boolean>(),
@@ -192,24 +196,60 @@ export const API = {
             return numStrs.length > 0 ? Number(numStrs[numStrs.length - 1]) : NaN
         },
         "parseAssetString": function(str: string) {
+            let url = str
+
+            //get fetch str/url
             if (!isNaN(Number(str))) {
-                return `https://assetdelivery.roblox.com/v1/asset?id=${str}`
+                url = `https://assetdelivery.roblox.com/v1/asset?id=${str}`
             } else if (str.startsWith("rbxassetid://")) {
-                return `https://assetdelivery.roblox.com/v1/asset?id=${str.slice(13)}`
+                url = `https://assetdelivery.roblox.com/v1/asset?id=${str.slice(13)}`
             } else if (str.startsWith("rbxasset://")) {
                 str = str.replaceAll("\\","/")
-                return (new URL("../assets/rbxasset/" + str.slice(11), import.meta.url)).toString()
+                url = FLAGS.ASSETS_PATH + str.slice(11)
             } else if (str.includes("roblox.com/asset")) { //i am tired of the 1 million variants of https://www.roblox.com/asset/?id=
-                return `https://assetdelivery.roblox.com/v1/asset?id=${API.Misc.idFromStr(str)}`
+                url = `https://assetdelivery.roblox.com/v1/asset?id=${API.Misc.idFromStr(str)}`
             } else if (str.startsWith("https://assetdelivery.roblox.com/v1/asset/?id=")) {
-                return `https://assetdelivery.roblox.com/v1/asset?id=${str.slice(46)}`
+                url = `https://assetdelivery.roblox.com/v1/asset?id=${str.slice(46)}`
             } else if (str.includes("assetdelivery.roblox.com")) {
-                return `https://assetdelivery.roblox.com/v1/asset?id=${API.Misc.idFromStr(str)}`
+                url = `https://assetdelivery.roblox.com/v1/asset?id=${API.Misc.idFromStr(str)}`
             } else if (str.startsWith(".")) { //local file
-                return (new URL(str, import.meta.url)).toString()
+                url = str
             } else {
                 console.warn(`Failed to parse path of ${str}`)
             }
+
+            //use v2 instead if enabled
+            if (FLAGS.ASSETDELIVERY_V2) {
+                if (url.includes("/v1/")) {
+                    url = url.replace("/v1/","/v2/")
+                }
+            }
+
+            return url
+        },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        "getCDNURLFromAssetDelivery": async function(url: string, headers?: any): Promise<string | Response> {
+            if (!FLAGS.ASSETDELIVERY_V2 || !url.includes("assetdelivery.roblox.com/v2/")) {
+                return url
+            } else {
+                const response = await RBLXGet(url, headers)
+                if (response.status !== 200) {
+                    return response
+                }
+
+                const data = await response.json()
+
+                return data.locations[0].location
+            }
+        },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        "assetURLToCDNURL": async function(url: string | number | bigint, headers?: any): Promise<string | Response> {
+            url = String(url)
+            if (url.includes("rbxcdn.com")) return url
+
+            const fetchStr = API.Misc.parseAssetString(url) || url
+            const cdnURL = await API.Misc.getCDNURLFromAssetDelivery(fetchStr, headers)
+            return cdnURL
         }
     },
     "Events": {
@@ -218,28 +258,34 @@ export const API = {
     "Generic": {
         LoadImage: async function(url: string): Promise<HTMLImageElement | undefined> {
             return new Promise((resolve) => {
-                const fetchStr = API.Misc.parseAssetString(url) || url
+                const cacheURL = API.Misc.parseAssetString(url) || url
 
-                const cachedImage = CACHE.Image.get(fetchStr)
+                const cachedImage = CACHE.Image.get(cacheURL)
 
                 if (cachedImage) {
                     resolve(cachedImage)
                 } else {
-                    const image = new Image()
-                    image.onload = () => {
-                        if (FLAGS.ENABLE_API_CACHE) {
-                            CACHE.Image.set(fetchStr, image)
-                        }
-                        resolve(image)
-                    }
-                    image.onerror = () => {
-                        if (FLAGS.ENABLE_API_CACHE) {
-                            CACHE.Image.set(fetchStr, undefined)
-                        }
-                        resolve(undefined)
-                    }
-                    image.crossOrigin = "anonymous"
-                    image.src = fetchStr
+                    CACHE.Image.set(cacheURL, new Promise((cacheResolve) => {
+                        API.Misc.assetURLToCDNURL(url).then((fetchStr) => {
+                            if (fetchStr instanceof Response) {
+                                resolve(undefined)
+                                return
+                            }
+                            const image = new Image()
+                            image.onload = () => {
+                                cacheResolve(image)
+                                resolve(image)
+                                CACHE.Image.set(cacheURL, image)
+                            }
+                            image.onerror = () => {
+                                cacheResolve(image)
+                                resolve(undefined)
+                                CACHE.Image.set(cacheURL, undefined)
+                            }
+                            image.crossOrigin = "anonymous"
+                            image.src = fetchStr
+                        })
+                    }))
                 }
             })
         },
@@ -565,10 +611,8 @@ export const API = {
         },
     },
     "Asset": {
-        GetAssetBuffer: async function(url: string, headers?: HeadersInit) {
-            const fetchStr = API.Misc.parseAssetString(url) || url
-
-            let cacheStr = fetchStr
+        GetAssetBuffer: async function(url: string, headers?: HeadersInit): Promise<Response | ArrayBuffer> {
+            let cacheStr = API.Misc.parseAssetString(url) || url
             if (headers) {
                 cacheStr += JSON.stringify(headers)
             }
@@ -578,7 +622,10 @@ export const API = {
                 return cachedBuffer
             } else {
                 API.Misc.startCurrentlyLoadingAssets()
-                const response = await RBLXGet(fetchStr, headers)
+                const fetchStr = await API.Misc.assetURLToCDNURL(url, headers)
+                if (fetchStr instanceof Response) return fetchStr
+
+                const response = await RBLXGet(fetchStr, undefined, false)
                 API.Misc.stopCurrentlyLoadingAssets()
                 if (response.status === 200) {
                     const data = await response.arrayBuffer()
@@ -591,8 +638,8 @@ export const API = {
                 }
             }
         },
-        GetRBX: async function(url: string, headers?: HeadersInit) {
-            const fetchStr = API.Misc.parseAssetString(url) || url
+        GetRBX: async function(url: string, headers?: HeadersInit): Promise<Response | RBX> {
+            const fetchStr = url
 
             let cacheStr = fetchStr
             if (headers) {
@@ -617,8 +664,8 @@ export const API = {
                 }
             }
         },
-        GetMesh: async function(url: string, headers?: HeadersInit, readOnly: boolean = false) {
-            const fetchStr = API.Misc.parseAssetString(url) || url
+        GetMesh: async function(url: string, headers?: HeadersInit, readOnly: boolean = false): Promise<FileMesh | Response> {
+            const fetchStr = url
 
             let cacheStr = fetchStr
             if (headers) {

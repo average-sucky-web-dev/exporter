@@ -1,5 +1,8 @@
 import { WorkerTypeToFunction } from "./worker-functions"
 import GenericWorker from "./generic-worker?worker&inline"
+import { FLAGS } from "./flags"
+
+console.log(GenericWorker)
 
 let idCounter = 0
 
@@ -14,7 +17,7 @@ export class WorkerPool {
 
     constructor() {
         //create workers if possible
-        if (window.Worker) {
+        if (window.Worker && FLAGS.USE_WORKERS) {
             const workerCount = navigator.hardwareConcurrency || 4
 
             for (let i = 0; i < workerCount; i++) {
@@ -25,9 +28,16 @@ export class WorkerPool {
 
                 worker.onmessage = (e: MessageEvent) => {
                     const [id, data]: [number, unknown] = e.data
+                    //console.log("Halfway recieved message: ", [id, data])
 
                     this._onMessage(i, id, data)
                 }
+                worker.onerror = (e: ErrorEvent) => {
+                    console.warn(e)
+                    throw new Error("Failed to create worker, try disabling workers by setting FLAGS.USE_WORKERS = false but do note doing so will degrade performance")
+                }
+
+                //console.log("Created worker", this)
             }
         }
     }
@@ -73,6 +83,7 @@ export class WorkerPool {
                 this.workersResolves[workerIndex].push([taskId, resolve])
             })
             this.workers[workerIndex].postMessage([taskId, type, data])
+            //console.log("Sent worker message", [taskId, type, data])
             return promise
         } else { //emulate worker
             return this._emulateWorker(type, data)
@@ -80,4 +91,6 @@ export class WorkerPool {
     }
 }
 
-WorkerPool.instance = new WorkerPool()
+export function setupWorkerPool() {
+    WorkerPool.instance = new WorkerPool()
+}
