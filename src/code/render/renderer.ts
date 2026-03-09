@@ -13,6 +13,7 @@ import { FLAGS } from '../misc/flags';
 import type { Vec3 } from '../mesh/mesh';
 import { loadCompositMeshes } from './textureComposer';
 import { setupWorkerPool } from '../misc/worker-pool';
+import { RegisterWrappers } from '../rblx/wrapper-register';
 
 export class RBXRenderer {
     static isRenderingMesh: Map<Instance,boolean> = new Map()
@@ -35,10 +36,15 @@ export class RBXRenderer {
 
     static plane?: THREE.Mesh
 
-    /**Fully sets up renderer with scene, camera and frame rendering*/
-    static fullSetup(includeScene: boolean = true, includeControls: boolean = true) {
+    static async boilerplateSetup() {
+        RegisterWrappers()
         setupWorkerPool()
         loadCompositMeshes()
+    }
+
+    /**Fully sets up renderer with scene, camera and frame rendering*/
+    static async fullSetup(includeScene: boolean = true, includeControls: boolean = true) {
+        await this.boilerplateSetup()
         RBXRenderer.create()
         if (includeScene) RBXRenderer.setupScene()
         if (includeControls) RBXRenderer.setupControls()
