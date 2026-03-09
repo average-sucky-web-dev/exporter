@@ -61,6 +61,7 @@ export class OutfitRenderer {
                         const newRig = result.generateTree().GetChildren()[0]
 
                         this.currentRig = newRig
+                        this.currentlyChangingRig = false
                         RBXRenderer.addInstance(this.currentRig, this.auth)
 
                         resolve(newRig)
@@ -78,7 +79,10 @@ export class OutfitRenderer {
     _updateOutfit() {
         if (this.currentlyUpdating) {
             this.hasNewUpdate = true
+            return
         }
+
+        this.currentlyUpdating = true
 
         //update rig
         const newRigType: AvatarType = this.outfit.playerAvatarType
@@ -100,6 +104,8 @@ export class OutfitRenderer {
                 if (humanoid) {
                     //apply description
                     hrpWrapper.applyDescription(humanoid).then((result) => {
+                        this.currentlyUpdating = false
+
                         //add rig to renderer and center camera
                         if (this.currentRig) {
                             RBXRenderer.addInstance(this.currentRig, this.auth)
@@ -109,7 +115,6 @@ export class OutfitRenderer {
                         }
                         //update again if outfit was set during load
                         if (result instanceof Instance) {
-                            this.currentlyUpdating = false
                             if (this.hasNewUpdate) {
                                 this.hasNewUpdate = false
                                 this._updateOutfit()
