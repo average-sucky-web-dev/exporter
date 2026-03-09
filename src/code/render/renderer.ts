@@ -4,7 +4,7 @@ import { download, rad, saveByteArray } from '../misc/misc';
 import type { RenderDesc } from './renderDesc';
 import { ObjectDesc } from './objectDesc';
 import { type Connection, type Instance } from '../rblx/rbx';
-import type { Authentication } from '../api';
+import { API, type Authentication } from '../api';
 import { EmitterGroupDescClassTypes, ObjectDescClassTypes } from '../rblx/constant';
 import { GLTFExporter } from 'three/examples/jsm/Addons.js';
 import { FXAAPass } from 'three/examples/jsm/postprocessing/FXAAPass.js';
@@ -29,12 +29,22 @@ export class RBXRenderer {
     static camera: THREE.PerspectiveCamera = new THREE.PerspectiveCamera( 70, 1 / 1, 0.1, 100 );
     static controls: OrbitControls | undefined
 
-    static renderer: THREE.WebGLRenderer = new THREE.WebGLRenderer({antialias: true})
+    static renderer: THREE.WebGLRenderer = new THREE.WebGLRenderer({antialias: true, alpha: true})
     static effectComposer: EffectComposer | undefined
 
+    static shadowEnabled: boolean = true
+    static shadowResolution: [number, number] = [256, 256]
     static resolution: [number,number] = [420, 420]
+    static backgroundColorHex: number = 0x2b2d33
+    static backgroundTransparent: boolean = false
+
+    static createLoadingIcon: boolean = true
+    static canvasContainer: HTMLDivElement
+    static loadingIcon?: HTMLSpanElement
+    static loadingIconStyle?: HTMLStyleElement
 
     static plane?: THREE.Mesh
+    static shadowPlane?: THREE.Mesh
 
     static async boilerplateSetup() {
         RegisterWrappers()
@@ -44,7 +54,7 @@ export class RBXRenderer {
 
     /**Fully sets up renderer with scene, camera and frame rendering*/
     static async fullSetup(includeScene: boolean = true, includeControls: boolean = true) {
-        await this.boilerplateSetup()
+        await RBXRenderer.boilerplateSetup()
         RBXRenderer.create()
         if (includeScene) RBXRenderer.setupScene()
         if (includeControls) RBXRenderer.setupControls()
@@ -66,8 +76,67 @@ export class RBXRenderer {
             RBXRenderer.renderer.setSize(RBXRenderer.resolution[0] * 2, RBXRenderer.resolution[1] * 2)
         }
 
-        RBXRenderer.renderer.domElement.setAttribute("style",`width: ${RBXRenderer.resolution[0]}px; height: ${RBXRenderer.resolution[1]}px; border-radius: 0px;`)
         RBXRenderer.renderer.domElement.setAttribute("id","OutfitInfo-outfit-image-3d")
+
+        //create container
+        RBXRenderer.canvasContainer = document.createElement("div")
+        RBXRenderer.canvasContainer.style.position = "relative"
+        RBXRenderer.canvasContainer.style.width = `${RBXRenderer.resolution[0]}px`
+        RBXRenderer.canvasContainer.style.height = `${RBXRenderer.resolution[1]}px`
+        RBXRenderer.canvasContainer.appendChild(RBXRenderer.renderer.domElement)
+
+        if (RBXRenderer.createLoadingIcon) {
+            //actual icon
+            RBXRenderer.loadingIcon = document.createElement("span")
+            RBXRenderer.loadingIcon.className = "roavatar-loader"
+            RBXRenderer.loadingIcon.style.opacity = "0"
+            RBXRenderer.loadingIcon.style.position = "absolute"
+            RBXRenderer.loadingIcon.style.bottom = "12px"
+            RBXRenderer.loadingIcon.style.right = "12px"
+            RBXRenderer.loadingIcon.style.width = "24px"
+            RBXRenderer.loadingIcon.style.height = "24px"
+            RBXRenderer.loadingIcon.style.transition = "0.1s"
+
+            //icon style
+            RBXRenderer.loadingIconStyle = document.createElement("style")
+            RBXRenderer.loadingIconStyle.textContent = `
+                /*Loader source: https://cssloaders.github.io/ */
+                .roavatar-loader {
+                width: 48px;
+                height: 48px;
+                display: inline-block;
+                position: relative;
+                background: #FFF;
+                box-sizing: border-box;
+                animation: rooavatarFlipX 1s linear infinite;
+                }
+
+                @keyframes rooavatarFlipX {
+                0% {
+                    transform: perspective(200px) rotateX(0deg) rotateY(0deg);
+                }
+                50% {
+                    transform: perspective(200px) rotateX(-180deg) rotateY(0deg);
+                }
+                100% {
+                    transform: perspective(200px) rotateX(-180deg) rotateY(-180deg);
+                }
+                }
+            `
+
+            //add to proper parents
+            document.head.appendChild(RBXRenderer.loadingIconStyle)
+            RBXRenderer.canvasContainer.appendChild(RBXRenderer.loadingIcon)
+
+            //loading event listener
+            const onLoadConnection = API.Events.OnLoadingAssets.Connect((newIsLoading) => {
+                if (RBXRenderer.loadingIcon) {
+                    RBXRenderer.loadingIcon.style.opacity = newIsLoading ? "1" : "0"
+                } else {
+                    onLoadConnection.Disconnect()
+                }
+            })
+        }
 
         if (FLAGS.USE_POST_PROCESSING) {
             RBXRenderer._createEffectComposer()
@@ -78,10 +147,12 @@ export class RBXRenderer {
      * @param lightingType "WellLit" is the default lighting for RoAvatar, "Thumbnail" tries to match the Roblox thumbnail lighting
      * @param backgroundColorHex is the hex code for the background color, for example 0x2b2d33
     */
-    static setupScene(lightingType: "WellLit" | "Thumbnail" = "WellLit", backgroundColorHex = 0x2b2d33) {
+    static setupScene(lightingType: "WellLit" | "Thumbnail" = "WellLit", backgroundColorHex = RBXRenderer.backgroundColorHex) {
         //const backgroundColor = new THREE.Color( 0x2C2E31 )
         //const backgroundColor = new THREE.Color( 0x191a1f )
         //const backgroundColor = new THREE.Color( 0x2a2a2d )
+        RBXRenderer.backgroundColorHex = backgroundColorHex
+
         const backgroundColor = new THREE.Color( backgroundColorHex )
         RBXRenderer.scene.background = backgroundColor;
 
@@ -119,10 +190,10 @@ export class RBXRenderer {
         }
 
         if (lightingType === "WellLit") {
-            directionalLight.castShadow = true
+            directionalLight.castShadow = RBXRenderer.shadowEnabled
         }
-        directionalLight.shadow.mapSize.width = 256;
-        directionalLight.shadow.mapSize.height = 256;
+        directionalLight.shadow.mapSize.width = RBXRenderer.shadowResolution[0];
+        directionalLight.shadow.mapSize.height = RBXRenderer.shadowResolution[1];
 
         const bottomOffset = 1.6
         const shadowPhysicalSize = 5
@@ -162,6 +233,7 @@ export class RBXRenderer {
         shadowPlane.rotation.set(rad(-90),0,0)
         shadowPlane.position.set(0,0,0)
         shadowPlane.receiveShadow = true;
+        RBXRenderer.shadowPlane = shadowPlane
         RBXRenderer.scene.add( shadowPlane );
 
         const planeSolidColorMaterial = new THREE.MeshBasicMaterial({color: backgroundColor})
@@ -193,9 +265,33 @@ export class RBXRenderer {
      * @param colorHex example: 0x2b2d33 which is the default
      */
     static setBackgroundColor(colorHex: number) {
-        RBXRenderer.scene.background = new THREE.Color( colorHex )
+        RBXRenderer.backgroundColorHex = colorHex
+        if (RBXRenderer.backgroundTransparent) {
+            RBXRenderer.scene.background = null
+        } else {
+            RBXRenderer.scene.background = new THREE.Color( RBXRenderer.backgroundColorHex )
+        }
+        if (RBXRenderer.plane) {
+            RBXRenderer.plane.visible = !RBXRenderer.backgroundTransparent
+        }
         if (RBXRenderer.plane) {
             RBXRenderer.plane.material = new THREE.MeshBasicMaterial({color: colorHex})
+        }
+    }
+
+    /**
+     * Sets the background and ground's visibility, but not the shadowPlane
+     * @param transparent If the background and ground should be transparent
+     */
+    static setBackgroundTransparent(transparent: boolean) {
+        RBXRenderer.backgroundTransparent = transparent
+        if (RBXRenderer.backgroundTransparent) {
+            RBXRenderer.scene.background = null
+        } else {
+            RBXRenderer.scene.background = new THREE.Color( RBXRenderer.backgroundColorHex )
+        }
+        if (RBXRenderer.plane) {
+            RBXRenderer.plane.visible = !RBXRenderer.backgroundTransparent
         }
     }
 
@@ -350,13 +446,31 @@ export class RBXRenderer {
     }
 
     static setRendererSize(width: number, height: number) {
+        RBXRenderer.resolution = [width, height]
+        RBXRenderer.renderer.domElement.setAttribute("style",`width: ${RBXRenderer.resolution[0]}px; height: ${RBXRenderer.resolution[1]}px; border-radius: 0px;`)
+        RBXRenderer.canvasContainer.style.width = `${RBXRenderer.resolution[0]}px`
+        RBXRenderer.canvasContainer.style.height = `${RBXRenderer.resolution[1]}px`
         RBXRenderer.renderer.setSize(width, height)
+        if (FLAGS.USE_POST_PROCESSING && FLAGS.POST_PROCESSING_IS_DOUBLE_SIZE) {
+            RBXRenderer.renderer.setSize(RBXRenderer.resolution[0] * 2, RBXRenderer.resolution[1] * 2)
+        }
         RBXRenderer.camera.aspect = width / height
         RBXRenderer.camera.updateProjectionMatrix()
     }
 
+    /**
+     * @deprecated Use getRendererElement instead which includes the loading icon
+     * @returns The element for the renderer canvas
+     */
     static getRendererDom() {
         return RBXRenderer.renderer.domElement
+    }
+
+    /**
+     * @returns An element containing the renderer canvas
+     */
+    static getRendererElement() {
+        return RBXRenderer.canvasContainer
     }
 
     static getRendererCamera() {
@@ -392,10 +506,22 @@ export class RBXRenderer {
     }
 }
 
+/**
+ * @deprecated Use mountElement instead
+ * @param container 
+ */
 export function mount( container: HTMLDivElement ) {
     if (container) {
         container.insertBefore(RBXRenderer.renderer.domElement, container.firstChild)
     } else {
         RBXRenderer.renderer.domElement.remove()
+    }
+}
+
+export function mountElement( container: HTMLDivElement ) {
+    if (container) {
+        container.insertBefore(RBXRenderer.canvasContainer, container.firstChild)
+    } else {
+        RBXRenderer.canvasContainer.remove()
     }
 }

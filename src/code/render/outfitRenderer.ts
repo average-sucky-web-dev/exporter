@@ -13,10 +13,11 @@ import { AnimatorWrapper } from '../rblx/instance/Animator';
 export class OutfitRenderer {
     auth: Authentication
     outfit: Outfit
-    currentRig?: Instance
+    currentRig?: Instance /**Instance for the Model of the current outfit */
     currentRigType: AvatarType
     rigPath: string
-    doCameraUpdate: boolean = true
+    doCameraUpdateOnLoad: boolean = true /**Makes camera update when new avatar has loaded */
+    doCameraUpdate: boolean = false /**Does camera update every frame */
 
     currentlyChangingRig: boolean = false
     currentlyUpdating: boolean = false
@@ -47,12 +48,14 @@ export class OutfitRenderer {
             if (!this.currentlyChangingRig) {
                 this.currentlyChangingRig = true
 
+                ///destroy old rig
                 if (this.currentRig) {
                     this.currentRig.Destroy()
                     this.currentRig = undefined
                 }
                 this.currentRigType = newRigType
 
+                //gets rig
                 API.Asset.GetRBX(`${this.rigPath}Rig${this.currentRigType}.rbxm`, undefined).then(result => {
                     if (result instanceof RBX) {
                         const newRig = result.generateTree().GetChildren()[0]
@@ -86,25 +89,32 @@ export class OutfitRenderer {
         }
 
         Promise.all(promises).then(() => {
-            //get humanoid description
+            //create humanoid description
             const hrp = new Instance("HumanoidDescription")
             const hrpWrapper = new HumanoidDescriptionWrapper(hrp)
             hrpWrapper.fromOutfit(this.outfit)
             
             if (this.currentRig) {
+                //get humanoid
                 const humanoid = this.currentRig.FindFirstChildOfClass("Humanoid")
                 if (humanoid) {
+                    //apply description
                     hrpWrapper.applyDescription(humanoid).then((result) => {
+                        //add rig to renderer and center camera
                         if (this.currentRig) {
                             RBXRenderer.addInstance(this.currentRig, this.auth)
+                            if (this.doCameraUpdateOnLoad) {
+                                this.centerCamera()
+                            }
                         }
+                        //update again if outfit was set during load
                         if (result instanceof Instance) {
                             this.currentlyUpdating = false
                             if (this.hasNewUpdate) {
                                 this.hasNewUpdate = false
                                 this._updateOutfit()
                             }
-                        } else {
+                        } else { //if failed
                             //mark it as dirty so next is full apply!
                             const oldHumanoidDescription = humanoid.FindFirstChildOfClass("HumanoidDescription")
                             oldHumanoidDescription?.Destroy()
@@ -128,6 +138,29 @@ export class OutfitRenderer {
     }
 
     /**
+     * Centers camera on avatar
+     */
+    centerCamera() {
+        if (this.currentRig) {
+            const upperTorso = this.currentRig.FindFirstChild("HumanoidRootPart")
+            if (upperTorso) {
+                const controls = RBXRenderer.getRendererControls()
+                const camera = RBXRenderer.getRendererCamera()
+
+                const pos = upperTorso.Prop("Position") as Vector3
+
+                if (controls) {
+                    const offset = new THREE.Vector3().subVectors(camera.position, controls.target)
+
+                    controls.target.set(pos.X, pos.Y + 0.5, pos.Z)
+                    camera.position.set(pos.X + offset.x, pos.Y + 0.5 + offset.y, pos.Z + offset.z)
+                    controls.update()
+                }
+            }
+        }
+    }
+
+    /**
      * Starts updating the animation of the outfit per frame
      */
     startAnimating() {
@@ -138,21 +171,7 @@ export class OutfitRenderer {
         this.animationInterval = setInterval(() => {
             //update camera position
             if (this.currentRig && this.doCameraUpdate) {
-                const upperTorso = this.currentRig.FindFirstChild("HumanoidRootPart")
-                if (upperTorso) {
-                    const controls = RBXRenderer.getRendererControls()
-                    const camera = RBXRenderer.getRendererCamera()
-
-                    const pos = upperTorso.Prop("Position") as Vector3
-
-                    if (controls) {
-                        const offset = new THREE.Vector3().subVectors(camera.position, controls.target)
-
-                        controls.target.set(pos.X, pos.Y + 0.5, pos.Z)
-                        camera.position.set(pos.X + offset.x, pos.Y + 0.5 + offset.y, pos.Z + offset.z)
-                        controls.update()
-                    }
-                }
+                this.centerCamera()
             }
 
             //update animation and instance renderables

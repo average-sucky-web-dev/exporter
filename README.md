@@ -7,7 +7,7 @@ Also available on npm: https://www.npmjs.com/package/roavatar-renderer
 
 IMPORTANT: Assets are NOT included in the npm module or this repository, you have to get them from the main RoAvatar repository
 
-Basic (not really) example on how to load an avatar, that is also untested:
+Basic example on how to load an avatar, that is also untested:
 ```html
 <!--I know this is kind of terrible but... it has to be included-->
 <script src="/draco_decoder.js"></script>
@@ -23,12 +23,13 @@ Basic (not really) example on how to load an avatar, that is also untested:
     //actually creating renderer
     const includeScene = true
     const includeControls = true
-    RBXRenderer.fullSetup(includeScene, includeControls)
+    await RBXRenderer.fullSetup(includeScene, includeControls)
     //renderer customization
     RBXRenderer.setBackgroundColor( 0xffffff )
     RBXRenderer.setRendererSize(1000,500)
+    RBXRenderer.setBackgroundTransparent(false)
     //add renderer to document
-    document.body.appendChild(RBXRenderer.getRendererDom())
+    document.body.appendChild(RBXRenderer.getRendererElement())
 
 //get avatar data for the user with id 1
 const outfit = API.Avatar.GetAvatarDetails(1)
