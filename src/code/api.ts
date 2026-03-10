@@ -623,7 +623,10 @@ export const API = {
             } else {
                 API.Misc.startCurrentlyLoadingAssets()
                 const fetchStr = await API.Misc.assetURLToCDNURL(url, headers)
-                if (fetchStr instanceof Response) return fetchStr
+                if (fetchStr instanceof Response) {
+                    API.Misc.stopCurrentlyLoadingAssets()
+                    return fetchStr
+                }
 
                 const response = await RBLXGet(fetchStr, undefined, false)
                 API.Misc.stopCurrentlyLoadingAssets()

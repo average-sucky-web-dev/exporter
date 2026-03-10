@@ -2,7 +2,7 @@ import { API } from "../../api";
 import { getRandomBetweenInclusive } from "../../misc/misc";
 import { AnimationTrack } from "../animation";
 import { DataType, FaceControlNames, type AnimationSet, type AnimationSetEntry } from "../constant";
-import { CFrame, Property, RBX } from "../rbx";
+import { CFrame, Connection, Instance, Property, RBX } from "../rbx";
 import { InstanceWrapper } from "./InstanceWrapper";
 
 class AnimatorWrapperData {
@@ -21,6 +21,10 @@ class AnimatorWrapperData {
     currentMoodAnimationTrack?: AnimationTrack
     
     moodTracks: AnimationTrack[] = []
+    toolTracks: AnimationTrack[] = []
+
+    toolAddedConnection?: Connection
+    toolRemovedConnection?: Connection
 }
 
 
@@ -35,8 +39,46 @@ export class AnimatorWrapper extends InstanceWrapper {
         if (!this.instance.HasProperty("_HasLoadedAnimation")) this.instance.addProperty(new Property("_HasLoadedAnimation", DataType.NonSerializable), false)
     }
 
+    created(): void {
+        if (this.instance.parent) {
+            this.updateToolConnections()
+        }
+        const ancestryChangedConnection = this.instance.AncestryChanged.Connect(() => {
+            this.updateToolConnections()
+        })
+
+        const destroyingConection = this.instance.Destroying.Connect(() => {
+            ancestryChangedConnection.Disconnect()
+            destroyingConection.Disconnect()
+        })
+    }
+
     get data() {
         return this.instance.Prop("_data") as AnimatorWrapperData
+    }
+
+    updateToolAnimation(rig: Instance) {
+        if (rig.FindFirstChildOfClass("Tool")) {
+            this._switchToolAnimation("toolnone")
+        } else {
+            this.stopToolAnimation()
+        }
+    }
+
+    updateToolConnections(): void {
+        this.data.toolAddedConnection?.Disconnect()
+        this.data.toolRemovedConnection?.Disconnect()
+        this.data.toolAddedConnection = undefined
+        this.data.toolRemovedConnection = undefined
+
+        const humanoid = this.instance.parent
+        const rig = humanoid?.parent
+
+        console.log(humanoid, rig)
+        if (humanoid && rig) {
+            this.data.toolAddedConnection = rig.ChildAdded.Connect(() => {this.updateToolAnimation(rig)})
+            this.data.toolRemovedConnection = rig.ChildRemoved.Connect(() => {this.updateToolAnimation(rig)})
+        }
     }
 
     _pickRandom(entries: AnimationSetEntry[]) {
@@ -163,6 +205,58 @@ export class AnimatorWrapper extends InstanceWrapper {
         return !!toPlayTrack
     }
 
+    stopToolAnimation() {
+        if (this.data.currentToolAnimationTrack) {
+            this.data.currentToolAnimationTrack.Stop()
+        }
+        this.data.currentToolAnimationTrack = undefined
+        this.data.currentToolAnimation = undefined
+    }
+
+    _switchToolAnimation(name: string) {
+        let transitionTime = 0.2
+        if (name === this.data.currentToolAnimation) {
+            transitionTime = 0.15
+        }
+
+        this.data.currentToolAnimation = name
+
+        //get appropriate track
+        let toPlayTrack: AnimationTrack | undefined = undefined
+
+        const entries = this.data.animationSet[name]
+        if (entries && entries.length > 0) {
+            const entry = this._pickRandom(entries)
+            if (entry) {
+                toPlayTrack = this._getTrack(entry.id)
+            }
+        }
+
+        //if oldTrack !== newTrack
+        if (toPlayTrack !== this.data.currentToolAnimationTrack) {
+            //if new track
+            if (toPlayTrack) {
+                //stop old track
+                if (this.data.currentToolAnimationTrack) {
+                    this.data.currentToolAnimationTrack.Stop(transitionTime)
+                }
+
+                this.data.currentToolAnimationTrack = undefined
+
+                //set new track as tool animation
+                if (!this.data.toolTracks.includes(toPlayTrack)) {
+                    this.data.toolTracks.push(toPlayTrack)
+                }
+
+                //play new track
+                this.data.currentToolAnimationTrack = toPlayTrack
+                toPlayTrack.Play(transitionTime)
+            }
+        }
+
+        return !!toPlayTrack
+    }
+
     isValidTrackForSet(track: AnimationTrack, name: string) {
         if (this.data.animationSet[name]) {
             for (const entry of this.data.animationSet[name]) {
@@ -181,6 +275,9 @@ export class AnimatorWrapper extends InstanceWrapper {
         }
         if ((this.data.currentMoodAnimation && !this.data.currentMoodAnimationTrack) || (this.data.currentMoodAnimation && this.data.currentMoodAnimationTrack && !this.isValidTrackForSet(this.data.currentMoodAnimationTrack, this.data.currentMoodAnimation))) {
             this._switchMoodAnimation(this.data.currentMoodAnimation)
+        }
+        if ((this.data.currentToolAnimation && !this.data.currentToolAnimationTrack) || (this.data.currentToolAnimation && this.data.currentToolAnimationTrack && !this.isValidTrackForSet(this.data.currentToolAnimationTrack, this.data.currentToolAnimation))) {
+            this._switchToolAnimation(this.data.currentToolAnimation)
         }
     }
 
@@ -214,6 +311,7 @@ export class AnimatorWrapper extends InstanceWrapper {
         //play regular tracks
         for (const track of this.data.animationTracks.values()) {
             if (this.data.moodTracks.includes(track)) continue
+            if (this.data.toolTracks.includes(track)) continue
 
             const looped = track.tick(addTime)
             if (this.data.currentAnimationTrack === track && looped && this.data.currentAnimation) {
@@ -230,6 +328,17 @@ export class AnimatorWrapper extends InstanceWrapper {
                 this._switchAnimation(this.data.currentAnimation)
             }
         }
+
+        //play tool tracks
+        for (const track of this.data.animationTracks.values()) {
+            if (!this.data.toolTracks.includes(track)) continue
+
+            const looped = track.tick(addTime)
+            if (this.data.currentAnimationTrack === track && looped && this.data.currentAnimation) {
+                this._switchAnimation(this.data.currentAnimation)
+            }
+        }
+
 
         const hasMood = this.data.currentMoodAnimation && this.data.currentMoodAnimation.length > 0
         const isEmote = this.data.currentAnimation?.startsWith("emote.")
@@ -410,6 +519,13 @@ export class AnimatorWrapper extends InstanceWrapper {
                     return true
                 }
                 break
+            case "tool":
+                if (this.data.currentToolAnimation !== name) {
+                    console.log("playing", name)
+                    return this._switchToolAnimation(name)
+                } else {
+                    return true
+                }
         }
 
         return false

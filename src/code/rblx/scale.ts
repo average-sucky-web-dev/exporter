@@ -1012,8 +1012,8 @@ export function replaceBodyPart(rig: Instance, child: Instance) {
 		const motor6ds = rig.GetDescendants()
 		for (const motor of motor6ds) {
 			if (motor.className === "Motor6D" || motor.className === "Weld") {
-				const part0 = motor.Prop("Part0")
-				const part1 = motor.Prop("Part1")
+				const part0 = motor.PropOrDefault("Part0", undefined)
+				const part1 = motor.PropOrDefault("Part1", undefined)
 				if (part0 && oldBodyPart === part0) {
 					motor.setProperty("Part0", child)
 				}

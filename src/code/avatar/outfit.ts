@@ -1011,6 +1011,16 @@ export class Outfit {
 
     fixOrders() {
         for (const asset of this.assets.slice().reverse()) {
+            //add order to all assets that should have one
+            if (!AccessoryAssetTypes.includes(asset.assetType.name) && LayeredAssetTypes.includes(asset.assetType.name)) {
+                if (asset.meta) {
+                    if (typeof asset.meta.order !== "number") {
+                        asset.meta.order = this.getNextOrder(LayeredClothingAssetOrder[asset.assetType.id])
+                    }
+                }
+            }
+
+            //fix order if it is occupied
             if (asset.meta && asset.meta.order && this.isOrderUsed(asset.meta.order, asset)) {
                 asset.setOrder(this.getNextOrder(asset.meta.order))
             }

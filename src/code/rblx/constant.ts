@@ -183,17 +183,6 @@ export const AllAnimations: AnimationProp[] = [
     "WalkAnimation",
 ]
 
-export const MainToSubNames: {[K in string]: string[]} = {
-    "climb": ["ClimbAnim"],
-    "fall": ["FallAnim"],
-    "idle": ["Animation1", "Animation2"],
-    "jump": ["JumpAnim"],
-    "mood": ["Animation1"],
-    "run": ["RunAnim"],
-    "swim": ["Swim"],
-    "walk": ["WalkAnim"]
-}
-
 export const AnimationPropToName: {[K in AnimationProp]: string} = {
     "ClimbAnimation": "climb",
     "FallAnimation": "fall",

@@ -40,27 +40,30 @@ export class ToolWrapper extends InstanceWrapper {
         const humanoid = rig?.FindFirstChildOfClass("Humanoid")
 
         if (handle && rig && rig.className === "Model" && humanoid) {
-            for (const child of rig.GetDescendants()) {
-                if (child.Prop("Name") === "RightGripAttachment") {
-                    const rightGripAttCF = (child.PropOrDefault("CFrame", new CFrame()) as CFrame).clone()
+            const rightHand = rig.FindFirstChild("RightHand") || rig.FindFirstChild("Right Arm")
+            if (rightHand) {
+                for (const child of rightHand.GetChildren()) {
+                    if (child.Prop("Name") === "RightGripAttachment") {
+                        const rightGripAttCF = (child.PropOrDefault("CFrame", new CFrame()) as CFrame).clone()
 
-                    if (humanoid.Prop("RigType") === HumanoidRigType.R6) {
-                        rightGripAttCF.Orientation[0] -= 90
+                        if (humanoid.Prop("RigType") === HumanoidRigType.R6) {
+                            rightGripAttCF.Orientation[0] -= 90
+                        }
+
+                        const weld = new Instance("Weld")
+                        weld.addProperty(new Property("Name", DataType.String), "ToolWeld_GripRoAvatar")
+                        weld.addProperty(new Property("Archivable", DataType.Bool), true)
+                        weld.addProperty(new Property("C0", DataType.CFrame), rightGripAttCF)
+                        weld.addProperty(new Property("C1", DataType.CFrame), grip)
+                        weld.addProperty(new Property("Part0", DataType.Referent), child.parent)
+                        weld.addProperty(new Property("Part1", DataType.Referent), handle)
+                        weld.addProperty(new Property("Active", DataType.Bool), true)
+                        weld.addProperty(new Property("Enabled", DataType.Bool), false)
+
+                        weld.setParent(handle)
+
+                        weld.setProperty("Enabled", true)
                     }
-
-                    const weld = new Instance("Weld")
-                    weld.addProperty(new Property("Name", DataType.String), "ToolWeld_GripRoAvatar")
-                    weld.addProperty(new Property("Archivable", DataType.Bool), true)
-                    weld.addProperty(new Property("C1", DataType.CFrame), grip)
-                    weld.addProperty(new Property("C0", DataType.CFrame), rightGripAttCF)
-                    weld.addProperty(new Property("Part1", DataType.Referent), handle)
-                    weld.addProperty(new Property("Part0", DataType.Referent), child.parent)
-                    weld.addProperty(new Property("Active", DataType.Bool), true)
-                    weld.addProperty(new Property("Enabled", DataType.Bool), false)
-
-                    weld.setParent(handle)
-
-                    weld.setProperty("Enabled", true)
                 }
             }
         }

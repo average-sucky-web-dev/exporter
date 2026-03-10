@@ -55,7 +55,7 @@ export const FLAGS: {
     USE_VERTEX_COLOR: true,
     USE_POST_PROCESSING: false, //this is needed to enable bloom, but ugly since it disables anti aliasing...
     POST_PROCESSING_IS_DOUBLE_SIZE: true, //does this count as anti aliasing?
-    GEAR_ENABLED: false,
+    GEAR_ENABLED: true,
 
     //skeleton
     SHOW_SKELETON_HELPER: false,

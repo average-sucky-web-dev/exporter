@@ -1129,6 +1129,32 @@ export class HumanoidDescriptionWrapper extends InstanceWrapper {
                         oldTool.Destroy()
                     }
 
+                    //destroy all motor6ds (they could have circular references which crash the renderer)
+                    //const handle = tool.FindFirstChild("Handle")
+                    for (const child of tool.GetDescendants()) {
+                        if (child.className === "Motor6D" || child.className === "Weld") {
+                            child.Destroy()
+                            /*
+                            if (child.HasProperty("Part0") && child.HasProperty("Part1") && child.HasProperty("C0") && child.HasProperty("C1")
+                                && child.Prop("Part1") === handle
+                            ) {
+                                const part0 = child.Prop("Part0") as Instance | undefined
+                                const part1 = child.Prop("Part1") as Instance | undefined
+                                const c0 = child.Prop("C0") as CFrame
+                                const c1 = child.Prop("C1") as CFrame
+
+                                child.setProperty("Part0", part1)
+                                child.setProperty("Part1", part0)
+                                child.setProperty("C0", c1)
+                                child.setProperty("C1", c0)
+                            } else if (child.HasProperty("Part0") && child.Prop("Part0") === handle) {
+                                //thats ok!
+                            } else {
+                                child.Destroy()
+                            }*/
+                        }
+                    }
+
                     tool.setParent(rig)
                 }
             } else {
@@ -1586,6 +1612,7 @@ export class HumanoidDescriptionWrapper extends InstanceWrapper {
                     toChange.push("dance1")
                     toChange.push("dance2")
                     toChange.push("dance3")
+                    toChange.push("toolnone")
                 }
 
                 miniPromises.push(this._applyAnimations(humanoid, toChange))

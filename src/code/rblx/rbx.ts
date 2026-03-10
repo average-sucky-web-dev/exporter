@@ -587,6 +587,7 @@ export class Instance {
     objectFormat?: number //same as above
 
     ChildAdded = new Event()
+    ChildRemoved = new Event()
     Destroying = new Event()
     Changed = new Event()
     AncestryChanged = new Event()
@@ -1024,11 +1025,16 @@ export class Instance {
             }
         }
 
+        const originalParent = this.parent
+
         this.parent = instance
 
         //special logic
         if (this.parent) {
             this.AccessoryBuildWeld()
+        }
+        if (originalParent && originalParent !== instance) {
+            originalParent.ChildRemoved.Fire(this)
         }
 
         //finalize
@@ -1049,19 +1055,20 @@ export class Instance {
         }
         this._connectionReferences = []
 
-        //destroy all children
-        for (const child of this.GetChildren()) {
-            child.Destroy()
-        }
-
         this.Destroying.Fire(this)
 
         this.ChildAdded.Clear()
+        this.ChildRemoved.Clear()
         this.Destroying.Clear()
         this.Changed.Clear()
         this.AncestryChanged.Clear()
 
         this.setParent(null)
+
+        //destroy all children
+        for (const child of this.GetChildren()) {
+            child.Destroy()
+        }
 
         //set all properties to null
         for (const property of this.getPropertyNames()) {
@@ -1820,7 +1827,7 @@ export class RBX {
         return view.buffer.slice(view.viewOffset, view.viewOffset + uncompressedLength)
     }
 
-    addItem(item: Element, itemParent?: Instance) {
+    addItem(propertyToReferent: Map<Property,string>, item: Element, itemParent?: Instance) {
         const instance = new Instance(item.getAttribute("class") || "null", true)
 
         const properties = item.querySelectorAll(":scope > Properties > *")
@@ -2011,6 +2018,15 @@ export class RBX {
                     instance.setProperty(property.name, Number(propertyNode.textContent))
                     break
                 }
+                case "Ref": {
+                    const property = new Property()
+                    property.name = propertyNode.getAttribute("name") || "null"
+                    property.typeID = DataType.Referent
+
+                    instance.addProperty(property)
+                    instance.setProperty(property.name, undefined)
+                    propertyToReferent.set(property, propertyNode.textContent)
+                }
             }
         }
 
@@ -2028,13 +2044,18 @@ export class RBX {
         console.log(xml)
 
         const itemParentMap = new Map<Element,Instance>()
+        const propertyToReferent = new Map<Property,string>()
+        const referentMap = new Map<string,Instance>()
 
         let currentItems: Element[] | NodeListOf<Element> = xml.querySelectorAll(":scope > Item")
         while (currentItems.length > 0) {
             const newCurrentItems = []
 
             for (const item of currentItems) {
-                const instance = this.addItem(item, itemParentMap.get(item))
+                const instance = this.addItem(propertyToReferent, item, itemParentMap.get(item))
+                const referent = item.getAttribute("referent") || "null"
+                referentMap.set(referent, instance)
+
                 const itemChildren = item.querySelectorAll(":scope > Item")
                 for (const itemChild of itemChildren) {
                     itemParentMap.set(itemChild, instance)
@@ -2045,7 +2066,20 @@ export class RBX {
             currentItems = newCurrentItems
         }
 
+        //set referent properties
         for (const child of this.dataModel.GetDescendants()) {
+            for (const propertyName of child.getPropertyNames()) {
+                const property = child._properties.get(propertyName)
+                if (property && property.typeID === DataType.Referent) {
+                    const referent = propertyToReferent.get(property)
+
+                    if (referent) {
+                        const instance = referentMap.get(referent)
+                        child.setProperty(propertyName, instance)
+                    }
+                }
+            }
+
             child.createWrapper()
         }
 
