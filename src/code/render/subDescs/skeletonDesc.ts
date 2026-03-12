@@ -174,7 +174,7 @@ export class SkeletonDesc {
             this.skeletonHelper = skeletonHelper
         }
 
-        //console.log(this.skeleton)
+        console.log(this.skeleton)
 
         //scene.add(this.rootBone)
     }
@@ -220,6 +220,9 @@ export class SkeletonDesc {
 
     updateBoneMatrix(selfInstance: Instance, includeTransform: boolean = false) {
         if (!selfInstance.parent) return
+        if (!this.meshDesc.fileMesh) return
+
+        const isHead = this.meshDesc.headMesh === this.meshDesc.mesh
 
         const rootBoneCFog = this.getRootCFrame(selfInstance, includeTransform)
         const humanoidRootPartEquivalent = this.getPartEquivalent(selfInstance, "HumanoidRootPart")
@@ -267,7 +270,7 @@ export class SkeletonDesc {
                 const head = this.getPartEquivalent(selfInstance, "Head")
                 if (head) {
                     const headSize = head.Prop("Size") as Vector3
-                    const ogHeadSize = getOriginalSize(head)
+                    const ogHeadSize = isHead ? new Vector3(...this.meshDesc.fileMesh.size) : getOriginalSize(head)
 
                     let scale = divide(headSize.toVec3(), ogHeadSize.toVec3())
                     if (this.meshDesc.wasAutoSkinned) {
@@ -288,32 +291,6 @@ export class SkeletonDesc {
                     setBoneToCFrame(bone, finalCF)
                 }
             }
-            /*if (bone.name === "Head") {
-
-                //find scale difference
-                const head = this.getPartEquivalent(selfInstance, "Head")
-                if (head) {
-                    const headSize = head.Prop("Size") as Vector3
-                    const ogHeadSize = getOriginalSize(head)
-
-                    const scale = divide(headSize.toVec3(), ogHeadSize.toVec3())
-
-                    //apply scale
-                    //const scaledCF = ogCF.clone()
-                    //scaledCF.Position = multiply(scaledCF.Position, scale)
-
-                    
-                    bone.scale.set(...scale)
-                }
-            }*/ /*else if (bone.name === "DynamicHead") {
-                const headPart = this.getPartEquivalent(selfInstance, "Head")
-                if (headPart) {
-                    const motor = headPart.FindFirstChildOfClass("Motor6D")
-                    if (motor) {
-                        setBoneToCFrame(bone, (motor.Prop("C1") as CFrame).inverse())
-                    }
-                }
-            }*/
         }
 
         this.updateMatrixWorld()
@@ -330,7 +307,9 @@ export class SkeletonDesc {
     }
 
     update(instance: Instance) {
-        if (!FLAGS.UPDATE_SKELETON || !instance.parent) return
+        if (!FLAGS.UPDATE_SKELETON || !instance.parent || !this.meshDesc.fileMesh) return
+
+        const isHead = this.meshDesc.headMesh === this.meshDesc.mesh
 
         this.updateBoneMatrix(instance)
         
@@ -348,7 +327,7 @@ export class SkeletonDesc {
 
                     if (head && facsMesh && facs && facs.quantizedTransforms) {
                         const headSize = head.Prop("Size") as Vector3
-                        const ogHeadSize = getOriginalSize(head)
+                        const ogHeadSize = isHead ? new Vector3(...this.meshDesc.fileMesh.size) : getOriginalSize(head)
                         let headScale = divide(headSize.toVec3(), ogHeadSize.toVec3())
                         if (this.meshDesc.wasAutoSkinned) {
                             headScale = [1,1,1]
@@ -374,7 +353,7 @@ export class SkeletonDesc {
                                 const head = this.getPartEquivalent(instance, "Head")
                                 if (head) {
                                     const headSize = head.Prop("Size") as Vector3
-                                    const ogHeadSize = getOriginalSize(head)
+                                    const ogHeadSize = isHead ? new Vector3(...this.meshDesc.fileMesh.size) : getOriginalSize(head)
 
                                     let scale = divide(headSize.toVec3(), ogHeadSize.toVec3())
                                     if (this.meshDesc.wasAutoSkinned) {
