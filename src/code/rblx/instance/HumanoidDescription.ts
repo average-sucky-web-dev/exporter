@@ -1013,7 +1013,7 @@ export class HumanoidDescriptionWrapper extends InstanceWrapper {
                         if (rbx instanceof RBX) {
                             const dataModel = rbx.generateTree()
                             const asset = dataModel.GetChildren()[0]
-                            if (asset) {
+                            if (asset && ["Shirt","Pants","ShirtGraphic"].includes(asset.className)) {
                                 const assetClassName = asset.className
                                 const originalAsset = rig.FindFirstChildOfClass(assetClassName)
                                 if (originalAsset) {
@@ -1021,6 +1021,8 @@ export class HumanoidDescriptionWrapper extends InstanceWrapper {
                                 }
 
                                 asset.setParent(rig)
+                            } else {
+                                console.warn(`Clothing asset does not exist or is invalid`)
                             }
                             resolve(undefined)
                         } else {
@@ -1070,7 +1072,7 @@ export class HumanoidDescriptionWrapper extends InstanceWrapper {
             if (rbx instanceof RBX) {
                 const dataModel = rbx.generateTree()
                 const face = dataModel.GetChildren()[0]
-                if (face) {
+                if (face && face.className === "Decal") {
                     const head = rig.FindFirstChild("Head")
                     if (head) {
                         const children = head.GetChildren()
@@ -1085,6 +1087,8 @@ export class HumanoidDescriptionWrapper extends InstanceWrapper {
                         //    face.Destroy()
                         //}
                     }
+                } else {
+                    console.warn(`Face asset does not exist or is invalid`)
                 }
             } else {
                 return rbx
@@ -1123,7 +1127,7 @@ export class HumanoidDescriptionWrapper extends InstanceWrapper {
             if (rbx instanceof RBX) {
                 const dataModel = rbx.generateTree()
                 const tool = dataModel.GetChildren()[0]
-                if (tool) {
+                if (tool && tool.className === "Tool") {
                     const oldTool = rig.FindFirstChildOfClass("Tool")
                     if (oldTool) {
                         oldTool.Destroy()
@@ -1156,6 +1160,8 @@ export class HumanoidDescriptionWrapper extends InstanceWrapper {
                     }
 
                     tool.setParent(rig)
+                } else {
+                    console.warn(`Gear asset does not exist or is invalid`)
                 }
             } else {
                 return rbx
@@ -1245,7 +1251,7 @@ export class HumanoidDescriptionWrapper extends InstanceWrapper {
                         const dataModel = rbx.generateTree()
                         const accessory = dataModel.GetChildren()[0]
 
-                        if (accessory) {
+                        if (accessory && accessory.className === "Accessory") {
                             let isLayered = false
                             const handle = accessory.FindFirstChild("Handle")
                             if (handle) {
@@ -1260,6 +1266,8 @@ export class HumanoidDescriptionWrapper extends InstanceWrapper {
                             if (accessoryDesc) {
                                 accessoryDesc.setProperty("Instance", accessory)
                             }
+                        } else {
+                            console.warn(`Accessory asset does not exist or is invalid`)
                         }
                         
                         resolve(undefined)
@@ -1350,7 +1358,7 @@ export class HumanoidDescriptionWrapper extends InstanceWrapper {
                         const dataModel = rbx.generateTree()
                         const makeup = dataModel.GetChildren()[0]
 
-                        if (makeup) {
+                        if (makeup && makeup.className === "Decal") {
                             const head = rig.FindFirstChild("Head")
                             if (head) {
                                 makeup.setParent(head)
@@ -1360,6 +1368,8 @@ export class HumanoidDescriptionWrapper extends InstanceWrapper {
                             if (makeupDesc) {
                                 makeupDesc.setProperty("Instance", makeup)
                             }
+                        } else {
+                            console.warn(`Makeup asset does not exist or is invalid`)
                         }
                         
                         resolve(undefined)
