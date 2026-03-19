@@ -288,7 +288,7 @@ class EmitterDesc extends DisposableDesc {
     }
 
     emit(groupDesc: EmitterGroupDesc) {
-        if (this.particles.length >= this.maxCount) {
+        if (this.particles.length >= this.maxCount || groupDesc.enabled === false) {
             return
         }
 
@@ -415,6 +415,8 @@ class EmitterDesc extends DisposableDesc {
 export class EmitterGroupDesc extends RenderDesc {
     lastTime: number = Date.now() / 1000
     time: number = Date.now() / 1000
+
+    enabled: boolean = true
 
     lowerBound: Vector3 = new Vector3(0,0,0)
     higherBound: Vector3 = new Vector3(0,0,0)
@@ -549,6 +551,9 @@ export class EmitterGroupDesc extends RenderDesc {
                 this.lowerBound = size.multiply(new Vector3(-0.5,-0.5,-0.5))
             }
         }
+
+        //check if enabled
+        this.enabled = child.PropOrDefault("Enabled", true) as boolean
 
         const className = child.className
 

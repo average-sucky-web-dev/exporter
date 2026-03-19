@@ -216,6 +216,8 @@ export class ObjectDesc extends RenderDesc {
             } else {
                 this.skeletonDesc = new SkeletonDesc(this, this.meshDesc, scene)
             }
+        } else {
+            this.meshDesc.fileMesh = undefined
         }
 
         if (originalResult) {

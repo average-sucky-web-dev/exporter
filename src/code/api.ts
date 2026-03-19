@@ -658,7 +658,7 @@ export const API = {
                     const buffer = response
                     const rbx = new RBX()
                     rbx.fromBuffer(buffer)
-                    if (FLAGS.ENABLE_API_CACHE) {
+                    if (FLAGS.ENABLE_API_CACHE && FLAGS.ENABLE_API_RBX_CACHE) {
                         CACHE.RBX.set(cacheStr, rbx.clone())
                     }
                     return rbx
@@ -688,7 +688,7 @@ export const API = {
                     const buffer = response
                     const mesh = new FileMesh()
                     await mesh.fromBuffer(buffer)
-                    if (FLAGS.ENABLE_API_CACHE) {
+                    if (FLAGS.ENABLE_API_CACHE && FLAGS.ENABLE_API_MESH_CACHE) {
                         CACHE.Mesh.set(cacheStr, mesh.clone())
                     }
                     return mesh

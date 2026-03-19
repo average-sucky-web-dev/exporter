@@ -155,6 +155,9 @@ export class SkeletonDesc {
         for (let i = 0; i < skinning.bones.length; i++) {
             const threeBone = new THREE.Bone()
             threeBone.name = skinning.nameTable[i]
+            if (threeBone.name === "HumanoidRootPart") {
+                threeBone.name = "HumanoidRootNode"
+            }
             boneArr.push(threeBone)
         }
 
@@ -256,7 +259,7 @@ export class SkeletonDesc {
             this.skeletonHelper = skeletonHelper
         }
 
-        //console.log(this.skeleton)
+        console.log(this.skeleton)
 
         //scene.add(this.rootBone)
     }

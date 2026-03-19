@@ -3,6 +3,8 @@ export const FLAGS: {
     
     BODYCOLOR3: boolean,
     ENABLE_API_CACHE: boolean,
+    ENABLE_API_MESH_CACHE: boolean,
+    ENABLE_API_RBX_CACHE: boolean,
     ROAVATAR_DATA_URL: string,
     ROAVATAR_TRYON_PLACE: number,
     ASSETS_PATH: string,
@@ -37,6 +39,8 @@ export const FLAGS: {
     //api
     BODYCOLOR3: true,
     ENABLE_API_CACHE: true,
+    ENABLE_API_MESH_CACHE: true,
+    ENABLE_API_RBX_CACHE: true,
     ROAVATAR_DATA_URL: "rbxassetid://102463700065175", //url of model to load that lists issues with specific versions
     ROAVATAR_TRYON_PLACE: 135979364355750,
     ASSETS_PATH: "../assets/rbxasset/",
