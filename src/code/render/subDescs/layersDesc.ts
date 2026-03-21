@@ -1,6 +1,7 @@
 import { RBFDeformerPatch } from "../../mesh/cage-mesh-deform"
+import { HSR } from "../../mesh/hidden-surface-removal"
 import { FileMesh } from "../../mesh/mesh"
-import { inheritSkeleton, mergeTargetWithReference, offsetMesh, scaleMesh } from "../../mesh/mesh-deform"
+import { distance, getUVtoIndexMap, hashVec2, inheritSkeleton, mergeTargetWithReference, offsetMesh, scaleMesh } from "../../mesh/mesh-deform"
 import { CFrame, Vector3, type Instance } from "../../rblx/rbx"
 import { traverseRigCFrame, traverseRigInstance } from "../../rblx/scale"
 import { promiseForMesh } from "./meshDesc"
@@ -125,6 +126,7 @@ export class WrapLayerDesc {
     referenceOrigin: CFrame
     cage: string
     cageOrigin: CFrame
+    mesh?: string
     autoSkin?: number
     importOrigin?: CFrame
 
@@ -167,6 +169,7 @@ export class ModelLayersDesc {
 
     //requires compilation
     _targetMeshes?: Promise<FileMesh[] | Response | undefined>
+    uvToHits?: Map<number,number>[]
 
     isSame(other: ModelLayersDesc) {
         if ((!this.targetMeshes && other.targetMeshes) || (this.targetMeshes && !other.targetMeshes)) {
@@ -327,6 +330,10 @@ export class ModelLayersDesc {
                 if (otherWrapLayer.HasProperty("ImportOrigin")) {
                     underneathLayer.importOrigin = otherWrapLayer.Prop("ImportOrigin") as CFrame
                 }
+                const parent = otherWrapLayer.parent
+                if (parent && parent.className === "MeshPart") {
+                    underneathLayer.mesh = parent.Prop("MeshId") as string
+                }
 
                 underneathLayers.push(underneathLayer)
             }
@@ -358,6 +365,7 @@ export class ModelLayersDesc {
         for (const enclosedLayer of this.layers) {
             meshPromises.push(promiseForMesh(enclosedLayer.cage))
             meshPromises.push(promiseForMesh(enclosedLayer.reference))
+            if (enclosedLayer.mesh) meshPromises.push(promiseForMesh(enclosedLayer.mesh, true))
         }
 
         const values = await Promise.all(meshPromises)
@@ -402,13 +410,13 @@ export class ModelLayersDesc {
         const targetMeshes: FileMesh[] = []
         targetMeshes.push(dist_mesh.clone())
 
-        for (const layer of this.layers) {
-            if (layer === this.layers[this.layers.length - 1]) {
-                continue
-            }
+        const latestUvToHitsMap = new Map<number,number>()
+        const uvToHits: Map<number,number>[] = []
 
+        for (const layer of this.layers) {
             const cage = meshMap.get(layer.cage)
             const reference = meshMap.get(layer.reference)
+            const mesh = layer.mesh ? meshMap.get(layer.mesh) : undefined
 
             if (!cage || !reference) {
                 throw new Error("this isnt possible, shut up typescript")
@@ -417,22 +425,85 @@ export class ModelLayersDesc {
             offsetMesh(reference, layer.referenceOrigin)
             offsetMesh(cage, layer.cageOrigin)
 
-            //make layer's inner cage match current inner cage
-            const newReference = reference.clone()
-            mergeTargetWithReference(newReference, dist_mesh, new Vector3(1,1,1), new CFrame())
+            if (mesh) {
+                console.time("ModelLayersDesc.createTargetMeshes.HSR")
+                const hsr = new HSR(mesh, reference, cage)
+                hsr.cullType = "back"
+                const innerHits = hsr.calculateInnerHits()
+                for (let i = 0; i < reference.coreMesh.faces.length; i++) {
+                    const face = reference.coreMesh.faces[i]
+                    const auv = hashVec2(...reference.coreMesh.verts[face.a].uv)
+                    const buv = hashVec2(...reference.coreMesh.verts[face.b].uv)
+                    const cuv = hashVec2(...reference.coreMesh.verts[face.c].uv)
 
-            //deform layer's outer cage to match the new inner cage
-            const targetDeformer = new RBFDeformerPatch(reference, newReference, cage)
-            targetDeformer.affectBones = false
-            await targetDeformer.solveAsync()
-            targetDeformer.deformMesh()
+                    const innerHit = innerHits[i] / hsr.rayCount
 
-            //merge outer cage with dist_mesh
-            mergeTargetWithReference(dist_mesh, cage, new Vector3(1,1,1), new CFrame())
+                    //a
+                    const originalInnerHitA = latestUvToHitsMap.get(auv)
+                    if (originalInnerHitA === undefined || originalInnerHitA < innerHit) {
+                        latestUvToHitsMap.set(auv, innerHit)
+                    }
+
+                    //b
+                    const originalInnerHitB = latestUvToHitsMap.get(buv)
+                    if (originalInnerHitB === undefined || originalInnerHitB < innerHit) {
+                        latestUvToHitsMap.set(buv, innerHit)
+                    }
+
+                    //c
+                    const originalInnerHitC = latestUvToHitsMap.get(cuv)
+                    if (originalInnerHitC === undefined || originalInnerHitC < innerHit) {
+                        latestUvToHitsMap.set(cuv, innerHit)
+                    }
+                }
+                console.timeEnd("ModelLayersDesc.createTargetMeshes.HSR")
+            }
+            uvToHits.push(structuredClone(latestUvToHitsMap))
+
+            cage.removeDuplicateVertices()
+            reference.removeDuplicateVertices()
+
+            //get unchanged verts
+            const ignoredRefIndices: number[] = []
+            const ignoredCageIndices: number[] = []
+
+            const uvToIndexMap = getUVtoIndexMap(cage)
+            for (let i = 0; i < reference.coreMesh.verts.length; i++) {
+                const vert = reference.coreMesh.verts[i]
+                const uv = hashVec2(...vert.uv)
+
+                const index = uvToIndexMap.get(uv)
+                if (index !== undefined) {
+                    const otherVert = cage.coreMesh.verts[index]
+                    if (distance(vert.position, otherVert.position) <= 0.001) {
+                        ignoredRefIndices.push(i)
+                        ignoredCageIndices.push(index)
+                    }
+                }
+            }
+
+            const shouldHaveNoDeformation = ignoredRefIndices.length === reference.coreMesh.verts.length
+
+            if (!shouldHaveNoDeformation) {
+                //make layer's inner cage match current inner cage
+                const newReference = reference.clone()
+                mergeTargetWithReference(newReference, dist_mesh, new Vector3(1,1,1), new CFrame())
+
+                //deform layer's outer cage to match the new inner cage
+                const targetDeformer = new RBFDeformerPatch(reference, newReference, cage, ignoredRefIndices)
+                targetDeformer.affectBones = false
+                await targetDeformer.solveAsync()
+                targetDeformer.deformMesh()
+
+                //merge outer cage with dist_mesh
+                mergeTargetWithReference(dist_mesh, cage, new Vector3(1,1,1), new CFrame(), ignoredCageIndices)
+            }
 
             targetMeshes.push(dist_mesh.clone())
         }
 
+        this.uvToHits = uvToHits
+        console.log(this.uvToHits)
         return targetMeshes
     }
 

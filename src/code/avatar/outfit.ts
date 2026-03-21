@@ -1258,6 +1258,12 @@ export class Outfit {
                 assetHeadShape = Number(view.readUint64())
             }
 
+            //staticfacialanimation
+            let staticFacialAnimation: boolean | undefined = undefined
+            if (flags & 64) {
+                staticFacialAnimation = true
+            }
+
             assetPromises.push(new Promise((resolve) => {
                 this.addAssetId(id).then(() => {
                     let asset: Asset | undefined = undefined
@@ -1274,6 +1280,7 @@ export class Outfit {
                         asset.meta.rotation = assetRot
                         asset.meta.scale = assetScale
                         asset.meta.headShape = assetHeadShape
+                        asset.meta.staticFacialAnimation = staticFacialAnimation
                     }
 
                     resolve(undefined)
@@ -1418,6 +1425,7 @@ export class Outfit {
             if (scale) flags += 8
             if (idIs64bit) flags += 16
             if (headShape !== undefined) flags += 32
+            if (asset.meta?.staticFacialAnimation) flags += 64
 
             view.writeUint8(flags)
 

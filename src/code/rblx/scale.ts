@@ -1078,12 +1078,17 @@ export function calculateMotor6Doffset(motor: Instance, includeTransform = false
 	return finalCF
 }
 
-export function traverseRigCFrame(instance: Instance) {
+export function traverseRigCFrame(instance: Instance, includeTransform: boolean = false) {
 	const motors: Instance[] = []
 
-	let lastMotor6D = instance.FindFirstChildOfClass("Motor6D")
-	if (!lastMotor6D) {
-		lastMotor6D = instance.FindFirstChildOfClass("Weld")
+	let lastMotor6D: Instance | undefined = undefined
+	if (instance.className === "Motor6D" || instance.className === "Weld") {
+		lastMotor6D = instance
+	} else {
+		lastMotor6D = instance.FindFirstChildOfClass("Motor6D")
+		if (!lastMotor6D) {
+			lastMotor6D = instance.FindFirstChildOfClass("Weld")
+		}
 	}
 	while (lastMotor6D) {
 		motors.push(lastMotor6D)
@@ -1098,7 +1103,7 @@ export function traverseRigCFrame(instance: Instance) {
 
 	let finalCF = new CFrame()
 	for (const motor of motors) {
-		finalCF = finalCF.multiply(calculateMotor6Doffset(motor))
+		finalCF = finalCF.multiply(calculateMotor6Doffset(motor, includeTransform))
 	}
 
 	return finalCF

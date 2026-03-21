@@ -3,11 +3,12 @@ import { BodyPartNameToEnum, HumanoidRigType, MeshType, ObjectDescClassTypes, Wr
 import { CFrame, Color3, Instance, isAffectedByHumanoid, Vector2, Vector3 } from "../../rblx/rbx"
 import { API } from '../../api'
 import { FileMesh } from '../../mesh/mesh'
-import { layerClothingChunked, layerClothingChunkedNormals2, layerClothingChunkedNormals, offsetMesh, getDistVertArray, minus, magnitude, transferSkeleton, inheritSkeleton, inheritUV } from '../../mesh/mesh-deform'
+import { layerClothingChunked, layerClothingChunkedNormals2, layerClothingChunkedNormals, offsetMesh, getDistVertArray, minus, magnitude, transferSkeleton, inheritSkeleton, inheritUV, hashVec2, buildVertKD } from '../../mesh/mesh-deform'
 import { RBFDeformerPatch } from '../../mesh/cage-mesh-deform'
 import { getModelLayersDesc, WrapDeformerDesc, WrapLayerDesc, type ModelLayersDesc } from './layersDesc'
 import { mapNum } from '../../misc/misc'
 import { FLAGS } from '../../misc/flags'
+import { nearestSearch } from '../../misc/kd-tree-3'
 //import { OBJExporter } from 'three/examples/jsm/Addons.js'
 //import { download } from '../misc/misc'
 
@@ -177,6 +178,8 @@ export class MeshDesc {
     //layering
     deformerDesc?: WrapDeformerDesc
     layerDesc?: WrapLayerDesc
+    target?: string
+    targetOrigin?: CFrame
     modelLayersDesc?: ModelLayersDesc
     
     //faces
@@ -457,6 +460,104 @@ export class MeshDesc {
             }
 
             the_ref_mesh = undefined
+            if (FLAGS.HIDE_LAYERED_CLOTHING) return
+        }
+
+        //wraptarget
+        if (this.target && this.targetOrigin && this.modelLayersDesc) {
+            //load meshes
+            const meshMap = new Map<string,FileMesh>()
+
+            const meshPromises: (Promise<[string, Response | FileMesh]>)[] = []
+            meshPromises.push(promiseForMesh(this.target))
+
+            const values = await Promise.all(meshPromises)
+            for (const [url, mesh] of values) {
+                if (mesh instanceof FileMesh) {
+                    meshMap.set(url, mesh)
+                } else {
+                    return mesh
+                }
+            }
+
+            mesh.stripLODS()
+
+            const targetCage = meshMap.get(this.target)!
+            targetCage.removeDuplicateVertices()
+            offsetMesh(targetCage, this.targetOrigin)
+
+            await this.modelLayersDesc.compileTargetMeshes()
+
+            const uvToHitsArray = this.modelLayersDesc.uvToHits
+            console.log(uvToHitsArray)
+            if (uvToHitsArray && uvToHitsArray.length > 0) {
+                const uvToHits = uvToHitsArray[uvToHitsArray.length - 1]
+                const vertKD = buildVertKD(targetCage)
+
+                const vertHitsMap: Map<number,number> = new Map()
+                const facesToRemove: number[] = []
+
+                for (let i = 0; i < mesh.coreMesh.verts.length; i++) {
+                    const vert = mesh.coreMesh.verts[i]
+                    const closestVertData = nearestSearch(vertKD, vert.position)
+                    const closestVertI = closestVertData.index
+                    const closestVert = targetCage.coreMesh.verts[closestVertI]
+
+                    const hits = uvToHits.get(hashVec2(...closestVert.uv))
+                    if (hits && hits >= 1) {
+                        vertHitsMap.set(i, hits)
+                    }
+                }
+
+                for (let i = 0; i < mesh.coreMesh.faces.length; i++) {
+                    const face = mesh.coreMesh.faces[i]
+                    const aHits = vertHitsMap.get(face.a) || 0
+                    const bHits = vertHitsMap.get(face.b) || 0
+                    const cHits = vertHitsMap.get(face.c) || 0
+
+                    const totalHits = aHits + bHits + cHits
+
+                    if (totalHits >= 3) {
+                        facesToRemove.push(i)
+                    }
+                }
+                /*for (let i = 0; i < mesh.coreMesh.faces.length; i++) {
+                    //const face = mesh.coreMesh.faces[i]
+                    const triangle = mesh.coreMesh.getTriangle(i)
+                    const trianglePos = averageVec3(triangle)
+
+                    const closestFace = nearestSearch(faceKD, trianglePos)
+                    const cfFace = targetCage.coreMesh.faces[closestFace.index]
+                    //const cfTriangle = targetCage.coreMesh.getTriangle(closestFace.index)
+
+                    const cfTriangleHash = hashVec3Safe(
+                        hashVec2(...targetCage.coreMesh.verts[cfFace.a].uv),
+                        hashVec2(...targetCage.coreMesh.verts[cfFace.b].uv),
+                        hashVec2(...targetCage.coreMesh.verts[cfFace.c].uv)
+                    )
+
+                    const hits = uvToHits.get(cfTriangleHash)
+            
+                    if (hits && hits >= 0.99) {
+                        //mesh.removeFace(i)
+                        facesToRemove.push(i)
+                        //const U = minus(cfTriangle[1], cfTriangle[0])
+                        //const V = minus(cfTriangle[2], cfTriangle[0])
+                
+                        //const invnormal = multiply(minus([0,0,0],(cross(U, V))), [5,5,5])
+
+                        //mesh.coreMesh.verts[face.a].position = add(mesh.coreMesh.verts[face.a].position, invnormal)
+                        //mesh.coreMesh.verts[face.b].position = add(mesh.coreMesh.verts[face.b].position, invnormal)
+                        //mesh.coreMesh.verts[face.c].position = add(mesh.coreMesh.verts[face.c].position, invnormal)
+                    } else if (hits === undefined) {
+                        console.log(cfTriangleHash)
+                    }
+                }*/
+
+                for (let i = facesToRemove.length - 1; i >= 0; i--) {
+                    mesh.removeFace(facesToRemove[i])
+                }
+            }
         }
 
         //wraptexturetransfer
@@ -678,6 +779,15 @@ export class MeshDesc {
         const wrapDeformer = child.FindFirstChildOfClass("WrapDeformer")
         const wrapTarget = child.FindFirstChildOfClass("WrapTarget")
 
+        if (model) {
+            this.modelLayersDesc = getModelLayersDesc(model)
+        }
+
+        if (wrapTarget) {
+            this.target = wrapTarget.Prop("CageMeshId") as string
+            this.targetOrigin = wrapTarget.Prop("CageOrigin") as CFrame
+        }
+
         if (wrapLayer && model) {
             this.scaleIsRelative = false
             //this.size = new Vector3(1,1,1)
@@ -695,8 +805,6 @@ export class MeshDesc {
                 this.layerDesc.importOrigin = wrapLayer.Prop("ImportOrigin") as CFrame
             }
             this.layerDesc.order = layerOrder
-            
-            this.modelLayersDesc = getModelLayersDesc(model)
         } else if (wrapDeformer && wrapTarget) {
             this.scaleIsRelative = false
 

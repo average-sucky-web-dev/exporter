@@ -18,6 +18,7 @@ type AssetMetaJson = {
     order?: number | null
     puffiness?: number | null
     headShape?: "Invalid" | number
+    staticFacialAnimation?: boolean
 }
 
 type AssetTypeJson = { id?: number; name?: string }
@@ -374,6 +375,7 @@ class AssetMeta {
     scale?: VecXYZ
 
     headShape?: number
+    staticFacialAnimation?: boolean
 
     constructor() {
         this.version = 1
@@ -399,7 +401,8 @@ class AssetMeta {
             "position": this.position,
             "rotation": this.rotation,
             "scale": this.scale,
-            "headShape": this.headShape
+            "headShape": this.headShape,
+            "staticFacialAnimation": this.staticFacialAnimation,
         }
 
         if (this.order || this.order == 0) {
@@ -442,6 +445,10 @@ class AssetMeta {
 
         if (assetMetaJson.headShape && assetMetaJson.headShape !== "Invalid") {
             this.headShape = assetMetaJson.headShape
+        }
+
+        if (assetMetaJson.staticFacialAnimation) {
+            this.staticFacialAnimation = assetMetaJson.staticFacialAnimation
         }
     }
 }

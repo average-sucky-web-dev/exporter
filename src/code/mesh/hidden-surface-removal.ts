@@ -21,3 +21,143 @@
             2. Add these outer cage faces into a cluster of related outer cage faces
             3. Update the related outer cage face of all faces in the cluster of related outer cage faces to each render face in the cluster of render face cluster
 */
+
+import * as THREE from 'three';
+import { MeshCollider, Ray } from "../misc/collision"
+import { nearestSearch, type KDNode } from "../misc/kd-tree-3"
+import type { FileMesh, Mat3x3, Vec3 } from "./mesh"
+import { add, averageVec3, buildFaceKD, cross, distance, minus, multiply, multiplyMatrixVector, normalize } from "./mesh-deform"
+import { RBXRenderer } from '../render/renderer';
+import { FLAGS } from '../misc/flags';
+
+function spreadVector(theta: number, phi: number): Vec3 {
+    const normal: Vec3 = [
+        -Math.sin(phi),
+        -Math.cos(phi) * Math.sin(theta),
+        -Math.cos(phi) * Math.cos(theta)
+    ]
+
+    return normal
+}
+
+const hitMaterial = new THREE.LineBasicMaterial({
+  color: 0x00ff00
+})
+
+const missMaterial = new THREE.LineBasicMaterial({
+  color: 0xff0000
+})
+
+export class HSR {
+    rayCount: number = 1
+    rayLength: number = 0.3
+    cullType: "front" | "back" = "back"
+
+    mesh: FileMesh
+    inner: FileMesh
+    outer: FileMesh
+
+    meshCollider: MeshCollider
+
+    meshFaceKD: KDNode | null
+
+    outerThresholds?: number[]
+
+    innerHits?: number[]
+
+    constructor(mesh: FileMesh, inner: FileMesh, outer: FileMesh) {
+        this.mesh = mesh
+        this.inner = inner
+        this.outer = outer
+
+        this.mesh.stripLODS()
+        this.inner.stripLODS()
+        this.outer.stripLODS()
+
+        this.meshCollider = new MeshCollider(this.mesh)
+
+        this.meshFaceKD = buildFaceKD(this.mesh)
+    }
+
+    getRays(mesh: FileMesh, index: number): Ray[] {
+        const triangle = mesh.coreMesh.getTriangle(index)
+        const trianglePos = averageVec3(triangle)
+
+        const U = minus(triangle[1], triangle[0])
+        const V = minus(triangle[2], triangle[0])
+
+        const normal = normalize(cross(U, V))
+        const tangent = normalize(U)
+        const bitangent = cross(normal, tangent)
+
+        const matrix: Mat3x3 = [
+            ...tangent,
+            ...bitangent,
+            ...normal,
+        ]
+
+        const rays: Ray[] = []
+
+        for (let i = 0; i < this.rayCount; i++) {
+            const theta = Math.random() * 2 * Math.PI
+            const phi = 0// Math.acos(1 * Math.random() - 0.5)
+
+            const spread = spreadVector(theta, phi)
+
+            let rotatedSpread = multiply(multiplyMatrixVector(matrix, spread), [this.rayLength, this.rayLength, this.rayLength])
+            rotatedSpread = multiply(normal, [this.rayLength, this.rayLength, this.rayLength])
+
+            const ray = new Ray(add(trianglePos, rotatedSpread), trianglePos)
+
+            rays.push(ray)
+        }
+
+        return rays
+    }
+
+    calculateInnerHits() {
+        this.meshCollider.cullType = this.cullType
+        this.innerHits = new Array(this.inner.coreMesh.faces.length).fill(0)
+
+        for (let i = 0; i < this.inner.coreMesh.faces.length; i++) {
+            const rays = this.getRays(this.inner, i)
+            let hits = 0
+
+            for (const ray of rays) {
+                const rayHit = this.meshCollider.raycast(ray)
+                if (rayHit) {
+                    hits += 1
+                }
+
+                if (FLAGS.HSR_SHOW_RAY) {
+                    const geometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(...ray.origin), new THREE.Vector3(...ray.end)])
+
+                    const line = new THREE.Line(geometry, rayHit ? hitMaterial : missMaterial)
+                    RBXRenderer.getScene().add(line)
+                }
+            }
+
+            this.innerHits[i] = hits
+        }
+
+        return this.innerHits
+    }
+
+    calculateCloseToCageThreshold() {
+        if (!this.meshFaceKD) return
+
+        this.outerThresholds = new Array(this.outer.coreMesh.faces.length)
+        for (let i = 0; i < this.outer.coreMesh.faces.length; i++) {
+            const triangle = this.outer.coreMesh.getTriangle(i)
+            const trianglePos = averageVec3(triangle)
+
+            const closestFaceResult = nearestSearch(this.meshFaceKD, trianglePos)
+            const closestTriangle = this.mesh.coreMesh.getTriangle(closestFaceResult.index)
+            const closestTrianglePos = averageVec3(closestTriangle)
+
+            const dist = distance(trianglePos, closestTrianglePos)
+
+            this.outerThresholds[i] = dist/2
+        }
+    }
+}

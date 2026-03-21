@@ -41,7 +41,7 @@ export function buildKDTree(points: Vec3[], indices: number[], depth = 0): KDNod
     return node;
 }
 
-type HeapItem = { dist: number; index: number };
+export type HeapItem = { dist: number; index: number };
 
 function siftUp(heap: HeapItem[], i: number): void {
     while (i > 0) {

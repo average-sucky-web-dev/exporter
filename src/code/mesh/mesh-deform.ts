@@ -1,9 +1,10 @@
 import * as THREE from 'three';
-import type { FileMesh, FileMeshSkinning, FileMeshSubset, FileMeshVertex, Triangle, Vec2, Vec3 } from "./mesh"
+import type { FileMesh, FileMeshSkinning, FileMeshSubset, FileMeshVertex, Mat3x3, Triangle, Vec2, Vec3 } from "./mesh"
 import { CFrame, Vector3 } from "../rblx/rbx"
 import { Wait } from '../misc/misc';
 import { buildKDTree, nearestSearch } from '../misc/kd-tree-3';
 import { FLAGS } from '../misc/flags';
+import { MeshCollider, Ray } from '../misc/collision';
 
 const WeightCache = new Map<string,WeightChunk[]>()
 
@@ -14,6 +15,16 @@ export function hashVec2(x: number,y: number) {
 export function hashVec3(x: number,y: number,z: number, distance: number) {
     const d = distance
     return Math.floor(x / d) * d * 10000000 + Math.floor(y / d) * d * 10000 + Math.floor(z / d) * d
+}
+
+export function hashVec3Safe(a: number | bigint, b: number | bigint, c: number | bigint) {
+    [a,b,c] = [a,b,c].sort()
+
+    a = BigInt(a)
+    b = BigInt(b)
+    c = BigInt(c)
+
+    return (a * 100n) + (b * 10n) + (c * 1n)
 }
 
 export function calculateMagnitude3D(x: number, y: number, z: number) {
@@ -64,6 +75,14 @@ export function cross(a: Vec3, b: Vec3): Vec3 {
   return [cx, cy, cz]
 }
 
+export function multiplyMatrixVector(m: Mat3x3, v: Vec3): Vec3 {
+    return [
+        m[0] * v[0] + m[3] * v[1] + m[6] * v[2],
+        m[1] * v[0] + m[4] * v[1] + m[7] * v[2],
+        m[2] * v[0] + m[5] * v[1] + m[8] * v[2]
+    ]
+}
+
 export function clamp(v0: Vec3, lower: Vec3, higher: Vec3): Vec3 {
     return [
         Math.min(Math.max(lower[0], v0[0]), higher[0]),
@@ -96,43 +115,16 @@ export function getUVtoVertMap(mesh: FileMesh) {
     return map
 }
 
-//Source: https://en.wikipedia.org/wiki/M%C3%B6ller%E2%80%93Trumbore_intersection_algorithm#C++_implementation
-export function ray_intersects_triangle(ray_origin: Vec3, ray_vector: Vec3, triangle: Triangle): Vec3 | null {
-    const epsilon: number = Number.EPSILON;
+export function getUVtoIndexMap(mesh: FileMesh) {
+    const map = new Map<number,number>()
 
-    const edge1: Vec3 = minus(triangle[1], triangle[0]);
-    const edge2: Vec3 = minus(triangle[2], triangle[0]);
-
-    // Backface culling for CCW-wound triangles.
-    const normal: Vec3 = normalize(cross(edge1, edge2));
-	if (dot(normal, ray_vector) > 0) return null;
-
-    const ray_cross_e2: Vec3 = cross(ray_vector, edge2);
-    const det: number = dot(edge1, ray_cross_e2);
-
-    if (Math.abs(det) < epsilon) return null; // Ray is parallel to triangle
-
-    const inv_det: number = 1.0 / det;
-    const s: Vec3 = minus(ray_origin, triangle[0]);
-    const u: number = inv_det * dot(s, ray_cross_e2);
-
-    if (u < 0.0 || u > 1.0) return null; // Ray passes outside edge2's bounds
-
-    const s_cross_e1: Vec3 = cross(s, edge1);
-    const v: number = inv_det * dot(ray_vector, s_cross_e1);
-
-    if (v < 0.0 || u + v > 1.0) return null; // Ray passes outside edge1's bounds
-
-    // The ray line intersects with the triangle.
-    // We compute t to find where on the ray the intersection is.
-    const t: number = inv_det * dot(edge2, s_cross_e1);
-
-    if (t > epsilon) // Ray intersection
-    {
-        return add(ray_origin, multiply(ray_vector, [t,t,t]));
+    for (let i = 0; i < mesh.coreMesh.verts.length; i++) {
+        const vert = mesh.coreMesh.verts[i]
+        const uvhash = hashVec2(vert.uv[0], vert.uv[1])
+        map.set(uvhash, i)
     }
-    else // This means that there is a line intersection but not a ray intersection.
-        return null;
+
+    return map
 }
 
 // Source: https://gamedev.stackexchange.com/questions/23743/whats-the-most-efficient-way-to-find-barycentric-coordinates
@@ -213,23 +205,58 @@ export function closestPointTriangle(p: Vec3, triangle: Triangle): Vec3 {
     return add(add(a, multiply([v,v,v], ab)), multiply([w,w,w], ac)); //#0
 }
 
-export function inheritUV(to: FileMesh, from: FileMesh) {
-    const faceCenters = from.coreMesh.faces.map((f) => {
-        const va = from.coreMesh.verts[f.a]
-        const vb = from.coreMesh.verts[f.b]
-        const vc = from.coreMesh.verts[f.c]
+export function averageVec3(vecs: Vec3[]) {
+    let total: Vec3 = [0,0,0]
+
+    for (const vec of vecs) {
+        total = add(total, vec)
+    }
+
+    total = divide(total, [vecs.length, vecs.length, vecs.length])
+
+    return total
+}
+
+export function buildFaceKD(mesh: FileMesh) {
+    //build face kd tree
+    const faceCenters = mesh.coreMesh.faces.map((f) => {
+        const va = mesh.coreMesh.verts[f.a]
+        const vb = mesh.coreMesh.verts[f.b]
+        const vc = mesh.coreMesh.verts[f.c]
 
         const center = divide(add(add(va.position, vb.position), vc.position), [3,3,3])
 
         return center
     })
-    const faceIndices = from.coreMesh.faces.map((_, i) => {return i})
+    const faceIndices = mesh.coreMesh.faces.map((_, i) => {return i})
 
     const faceKD = buildKDTree(faceCenters, faceIndices)
 
+    return faceKD
+}
+
+export function buildVertKD(mesh: FileMesh) {
+    //build vert kd tree
+    const vertCenters = mesh.coreMesh.verts.map((v) => {
+        return v.position
+    })
+    const vertIndices = mesh.coreMesh.verts.map((_, i) => {return i})
+
+    const vertKD = buildKDTree(vertCenters, vertIndices)
+
+    return vertKD
+}
+
+export function inheritUV(to: FileMesh, from: FileMesh) {
+    const meshCollider = new MeshCollider(to)
+
+    const faceKD = buildFaceKD(from)
+
+    //for each to vert
     for (let i = 0; i < to.coreMesh.verts.length; i++) {
         const vert = to.coreMesh.verts[i]
 
+        //find closest face and verts
         const closest = nearestSearch(faceKD, vert.position)
         const closestI = closest.index
 
@@ -238,6 +265,7 @@ export function inheritUV(to: FileMesh, from: FileMesh) {
         const vb = from.coreMesh.verts[face.b]
         const vc = from.coreMesh.verts[face.c]
 
+        //do baycentric math to get new uv
         const triangle = from.coreMesh.getTriangle(closestI)
 
         const closestPointPos = closestPointTriangle(vert.position, triangle)
@@ -247,6 +275,13 @@ export function inheritUV(to: FileMesh, from: FileMesh) {
             barycentricPos[0] * va.uv[0] + barycentricPos[1] * vb.uv[0] + barycentricPos[2] * vc.uv[0],
             barycentricPos[0] * va.uv[1] + barycentricPos[1] * vb.uv[1] + barycentricPos[2] * vc.uv[1],
         ]
+
+        //potentially invalidate uv
+        const ray = new Ray(vert.position, closestPointPos)
+        if (meshCollider.raycast(ray)) {
+            newUV[0] = -Infinity
+            newUV[1] = -Infinity
+        }
 
         if (closest.dist > 0.5) { //invalidates uv
             newUV[0] = -Infinity
@@ -433,12 +468,14 @@ export function inheritSkeleton(to: FileMesh, from: FileMesh) {
     }
 }
 
-export function mergeTargetWithReference(reference: FileMesh, target: FileMesh, targetSize: Vector3, targetCFrame: CFrame): number[] {
+export function mergeTargetWithReference(reference: FileMesh, target: FileMesh, targetSize: Vector3, targetCFrame: CFrame, ignoredIndices: number[] = []): number[] {
     const referenceHashMap = getUVtoVertMap(reference)
     
     const changedVerts = []
 
     for (let i = 0; i < target.coreMesh.verts.length; i++) {
+        if (ignoredIndices.includes(i)) continue
+
         const vert = target.coreMesh.verts[i]
         const hash = hashVec2(vert.uv[0], vert.uv[1])
         

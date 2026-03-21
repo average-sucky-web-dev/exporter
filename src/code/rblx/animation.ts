@@ -549,6 +549,7 @@ class AnimationTrack {
     looped = false
     priority = AnimationPriority.Core
     shouldUpdateMotors = false
+    updateFaceControls = true
 
     //playing info
     pOriginalWeight = 0
@@ -950,7 +951,7 @@ class AnimationTrack {
                             motor.setProperty("Transform", transformCF, true)
                         }
                     }
-                } else if (group instanceof FaceKeyframeGroup && this.rig) {
+                } else if (group instanceof FaceKeyframeGroup && this.rig && this.updateFaceControls) {
                     const part = this.rig.FindFirstChild(group.parentName)
                     if (part) {
                         const faceControls = part.FindFirstChildOfClass("FaceControls")
@@ -1031,7 +1032,7 @@ class AnimationTrack {
                         const transformCF = lerpCFrame(oldTransformCF, (cf).inverse(), this.weight)
                         motor.setProperty("Transform", transformCF, true)
                     }
-                } else if (curve instanceof FaceCruve && this.rig && curve.value) {
+                } else if (curve instanceof FaceCruve && this.rig && curve.value && this.updateFaceControls) {
                     const part = this.rig.FindFirstChild(curve.parentName)
                     if (part) {
                         const faceControls = part.FindFirstChildOfClass("FaceControls")

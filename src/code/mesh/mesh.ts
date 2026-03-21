@@ -4,6 +4,7 @@ import SimpleView from "../lib/simple-view"
 import { clonePrimitiveArray } from "../misc/misc"
 import { add, divide, hashVec2, hashVec3, magnitude, minus } from "./mesh-deform"
 import { Vector3 } from "../rblx/rbx"
+import type { Bounds } from "../misc/collision";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 declare const DracoDecoderModule: any;
@@ -556,10 +557,10 @@ export class FileMesh {
     facs?: FACS
     hsrAvis?: HSRAVIS
 
-    _bounds?: [Vec3,Vec3]
+    _bounds?: Bounds
     _size?: Vec3 = undefined
 
-    get bounds(): [Vec3,Vec3] {
+    get bounds(): Bounds {
         if (!this._bounds) {
         //max mesh size is 2048 i think? so this should be enough
             let minX = 999999
@@ -1122,7 +1123,7 @@ export class FileMesh {
 
         this.coreMesh.faces = this.coreMesh.faces.slice(facesStart, facesEnd)
 
-        this.lods.lodOffsets = [0, this.coreMesh.faces.length - 1]
+        this.lods.lodOffsets = [0, 0]
     }
 
     padSkinnings() {
@@ -1396,6 +1397,10 @@ export class FileMesh {
         this.coreMesh.verts = newVerts
         this.skinning.skinnings = newSkinnings
         return newVerts.length
+    }
+
+    removeFace(index: number) {
+        this.coreMesh.faces.splice(index, 1)
     }
 
     basicSkin(boneNames: string[]) {

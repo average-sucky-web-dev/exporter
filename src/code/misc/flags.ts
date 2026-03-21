@@ -16,8 +16,8 @@ export const FLAGS: {
     LAYERED_CLOTHING_ALGORITHM: "linear" | "linearnormal" | "linearnormal2" | "rbf",
 
     RBF_PATCH_COUNT: number,
-    RBF_PATCH_DETAIL_SAMPLES: 48,
-    RBF_PATCH_SHAPE_SAMPLES: 32,
+    RBF_PATCH_DETAIL_SAMPLES: number,
+    RBF_PATCH_SHAPE_SAMPLES: number,
 
     USE_VERTEX_COLOR: boolean
     USE_POST_PROCESSING: boolean,
@@ -29,6 +29,9 @@ export const FLAGS: {
     ANIMATE_SKELETON: boolean,
     AUTO_SKIN_EVERYTHING: boolean,
     USE_LOCAL_SKELETONDESC: boolean,
+
+    HSR_SHOW_RAY: boolean,
+    HIDE_LAYERED_CLOTHING: boolean,
 
     SEARCH_FOR_STRING: string | undefined,
     LOAD_TEST_PLACE: string | undefined,
@@ -68,6 +71,10 @@ export const FLAGS: {
     ANIMATE_SKELETON: true,
     AUTO_SKIN_EVERYTHING: false,
     USE_LOCAL_SKELETONDESC: false,
+
+    //HSR
+    HSR_SHOW_RAY: false,
+    HIDE_LAYERED_CLOTHING: false,
 
     //debug
     SEARCH_FOR_STRING: undefined, //"requestparams" //"looks/" //this is useful if you want to find api endpoints
