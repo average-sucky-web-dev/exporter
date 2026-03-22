@@ -49,8 +49,8 @@ const missMaterial = new THREE.LineBasicMaterial({
 })
 
 export class HSR {
-    rayCount: number = 3
-    rayLength: number = 0.5
+    rayCount: number = FLAGS.HSR_RAY_COUNT
+    rayLength: number = FLAGS.HSR_RAY_LENGTH
     cullType: "front" | "back" = "back"
     phiAngle = 0
 

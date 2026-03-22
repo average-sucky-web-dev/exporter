@@ -1,5 +1,5 @@
 import type { Vec3 } from "../mesh/mesh";
-import type { Bounds } from "./collision";
+import { Ray, RayBoundsCollide, type Bounds } from "./collision";
 import { lerp } from "./misc";
 
 export class OctreeChild<T> {
@@ -131,6 +131,25 @@ export class OctreeNode<T> {
                     if (!division || (division.children.length <= 0 && division.isEnd)) continue
 
                     total.push(...division.collide(func))
+                }
+            }
+
+            return total
+        }
+    }
+
+    collideRay(ray: Ray): OctreeNode<T>[] {
+        if (this.isEnd) {
+            return RayBoundsCollide(ray, this.bounds) ? [this] : []
+        } else {
+            const total = []
+
+            if (RayBoundsCollide(ray, this.bounds)) {
+                const divisions = this.getDivisions()
+                for (const division of divisions) {
+                    if (!division || (division.children.length <= 0 && division.isEnd)) continue
+
+                    total.push(...division.collideRay(ray))
                 }
             }
 

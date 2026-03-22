@@ -120,9 +120,10 @@ export class MeshCollider {
     }
 
     raycast(ray: Ray): boolean {
-        const collidingNodes = this.octree.collide((bounds) => {
+        /*const collidingNodes = this.octree.collide((bounds) => {
             return RayBoundsCollide(ray, bounds)
-        })
+        })*/
+       const collidingNodes = this.octree.collideRay(ray)
 
         for (const node of collidingNodes) {
             for (const child of node.children) {

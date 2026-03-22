@@ -85,7 +85,7 @@ function arrIsSameCF(arr0: CFrame[], arr1: CFrame[]) {
     return true
 }
 
-function arrIsSameOrder<T>(arr0: T[], arr1: T[]) {
+export function arrIsSameOrder<T>(arr0: T[], arr1: T[]) {
     if (arr0.length !== arr1.length) {
         return false
     }

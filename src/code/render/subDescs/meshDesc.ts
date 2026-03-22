@@ -3,7 +3,7 @@ import { BodyPartNameToEnum, HumanoidRigType, MeshType, ObjectDescClassTypes, Wr
 import { CFrame, Color3, Instance, isAffectedByHumanoid, Vector2, Vector3 } from "../../rblx/rbx"
 import { API } from '../../api'
 import { FileMesh } from '../../mesh/mesh'
-import { layerClothingChunked, layerClothingChunkedNormals2, layerClothingChunkedNormals, offsetMesh, getDistVertArray, minus, magnitude, transferSkeleton, inheritSkeleton, inheritUV, hashVec2, buildVertKD, divide, distance } from '../../mesh/mesh-deform'
+import { layerClothingChunked, layerClothingChunkedNormals2, layerClothingChunkedNormals, offsetMesh, getDistVertArray, minus, magnitude, transferSkeleton, inheritSkeleton, inheritUV, hashVec2, buildVertKD, divide } from '../../mesh/mesh-deform'
 import { RBFDeformerPatch } from '../../mesh/cage-mesh-deform'
 import { getModelLayersDesc, WrapDeformerDesc, WrapLayerDesc, type ModelLayersDesc } from './layersDesc'
 import { mapNum } from '../../misc/misc'
@@ -41,7 +41,7 @@ function doHSR(totalUvToHits: Map<number,number>, targetCage: FileMesh, mesh: Fi
         const closestVertI = closestVertData.index
         const closestVert = targetCage.coreMesh.verts[closestVertI]
 
-        if (distance(closestVert.position, vert.position) > 0.3) continue
+        //if (distance(closestVert.position, vert.position) > 0.3) continue
 
         const hits = totalUvToHits.get(hashVec2(...closestVert.uv))
         if (hits !== undefined) {
@@ -471,6 +471,50 @@ export class MeshDesc {
             }
 
             if (!referenceAndCageIdentical) {
+                if (this.hsrDesc) {
+                    //get self layer index
+                    let layerIndex = 0
+
+                    for (let i = 0; i < this.modelLayersDesc.layers.length; i++) {
+                        if (this.modelLayersDesc.layers[i].isSame(this.layerDesc)) {
+                            layerIndex = i
+                            break
+                        }
+                    }
+
+                    //hsr
+                    mesh.stripLODS()
+
+                    const targetCage = cage_mesh
+                    offsetMesh(targetCage, this.layerDesc.cageOrigin)
+
+                    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+                    mesh.size
+
+                    const uvToHitsArray = await this.hsrDesc.compileUVsToHits()
+                    //console.log(uvToHitsArray)
+                    if (uvToHitsArray && !(uvToHitsArray instanceof Response) && uvToHitsArray.length > 0 && layerIndex < uvToHitsArray.length) {
+                        //get total accumulated
+                        const totalUvToHits = new Map<number,number>()
+                        for (let i = layerIndex + 1; i < uvToHitsArray.length; i++) {
+                            const uvToHitMap = uvToHitsArray[i]
+
+                            for (const key of uvToHitMap.keys()) {
+                                const current = totalUvToHits.get(key)
+                                const newValue = uvToHitMap.get(key)
+
+                                if ((newValue && current === undefined) || (newValue && current && newValue > current)) {
+                                    totalUvToHits.set(key, newValue)
+                                }
+                            }
+                        }
+
+                        doHSR(totalUvToHits, targetCage, mesh, false)
+                    }
+                }
+
+                //DO DEFORMATION
+
                 //offset ref_mesh
                 offsetMesh(ref_mesh, this.layerDesc.referenceOrigin)
 
@@ -545,48 +589,6 @@ export class MeshDesc {
                     }
                 }
                 offsetMesh(mesh, totalOffset)
-            }
-
-            if (this.hsrDesc) {
-                //get self layer index
-                let layerIndex = 0
-
-                for (let i = 0; i < this.modelLayersDesc.layers.length; i++) {
-                    if (this.modelLayersDesc.layers[i].isSame(this.layerDesc)) {
-                        layerIndex = i
-                        break
-                    }
-                }
-
-                //hsr
-                mesh.stripLODS()
-
-                const targetCage = cage_mesh
-                offsetMesh(targetCage, this.layerDesc.cageOrigin)
-
-                // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-                mesh.size
-
-                const uvToHitsArray = await this.hsrDesc.compileUVsToHits()
-                //console.log(uvToHitsArray)
-                if (uvToHitsArray && !(uvToHitsArray instanceof Response) && uvToHitsArray.length > 0 && layerIndex < uvToHitsArray.length) {
-                    //get total accumulated
-                    const totalUvToHits = new Map<number,number>()
-                    for (let i = layerIndex + 1; i < uvToHitsArray.length; i++) {
-                        const uvToHitMap = uvToHitsArray[i]
-
-                        for (const key of uvToHitMap.keys()) {
-                            const current = totalUvToHits.get(key)
-                            const newValue = uvToHitMap.get(key)
-
-                            if ((newValue && current === undefined) || (newValue && current && newValue > current)) {
-                                totalUvToHits.set(key, newValue)
-                            }
-                        }
-                    }
-
-                    doHSR(totalUvToHits, targetCage, mesh, false)
-                }
             }
 
             the_ref_mesh = undefined
@@ -861,7 +863,7 @@ export class MeshDesc {
         if (wrapTarget) {
             this.target = wrapTarget.Prop("CageMeshId") as string
             this.targetOrigin = wrapTarget.Prop("CageOrigin") as CFrame
-            if (FLAGS.ENABLE_HSR && model) this.hsrDesc = getModelHSRDesc(model)
+            if (FLAGS.ENABLE_HSR && model && child.Prop("Name") !== "Head") this.hsrDesc = getModelHSRDesc(model)
         }
 
         if (wrapLayer && model) {

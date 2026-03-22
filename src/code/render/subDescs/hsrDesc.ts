@@ -1,8 +1,10 @@
 import { HSR } from "../../mesh/hidden-surface-removal";
 import { FileMesh } from "../../mesh/mesh";
 import { hashVec2, offsetMesh } from "../../mesh/mesh-deform";
+import { FLAGS } from "../../misc/flags";
+import { AlphaMode } from "../../rblx/constant";
 import type { CFrame, Instance } from "../../rblx/rbx";
-import { arrIsSameWrapLayer, WrapLayerDesc } from "./layersDesc";
+import { arrIsSameOrder, arrIsSameWrapLayer, WrapLayerDesc } from "./layersDesc";
 import { promiseForMesh } from "./meshDesc";
 
 const modelHSRDescs = new Map<Instance,HSRDesc>()
@@ -10,6 +12,7 @@ const CACHE_uvToHits = new Map<string,Map<number,number>>()
 
 export class HSRDesc {
     layers?: WrapLayerDesc[]
+    layerTransparent?: boolean[]
 
     uvsToHits?: Promise<Map<number,number>[] | Response>
 
@@ -24,10 +27,24 @@ export class HSRDesc {
             }
         }
 
+        if ((!this.layerTransparent && other.layerTransparent) || (this.layerTransparent && !other.layerTransparent)) {
+            return false
+        }
+
+        if (this.layerTransparent && other.layerTransparent) {
+            if (!arrIsSameOrder(this.layerTransparent, other.layerTransparent)) {
+                return false
+            }
+        }
+
         return true
     }
 
     fromModel(model: Instance) {
+        this.layerTransparent = []
+
+        const layerTransparencyMap = new Map<WrapLayerDesc,boolean>()
+
         //underneath wrap layers
         const underneathLayers: WrapLayerDesc[] = []
 
@@ -52,11 +69,26 @@ export class HSRDesc {
                     underneathLayer.mesh = parent.Prop("MeshId") as string
                 }
 
+                let isTransparent = false
+
+                const surfaceAppearance = parent?.FindFirstChildOfClass("SurfaceAppearance")
+                if (surfaceAppearance) {
+                    const surfaceAppearanceAlphaMode = surfaceAppearance.Prop("AlphaMode") as number
+                    if (surfaceAppearanceAlphaMode === AlphaMode.Transparency) {
+                        isTransparent = true
+                    }
+                }
+
+                layerTransparencyMap.set(underneathLayer, isTransparent)
                 underneathLayers.push(underneathLayer)
             }
         }
 
         this.layers = underneathLayers.sort((a,b) => {return (a.order || 0) - (b.order || 0)})
+
+        for (const layer of this.layers) {
+            this.layerTransparent.push(layerTransparencyMap.get(layer)!)
+        }
     }
 
     async createUVsToHits() {
@@ -88,13 +120,16 @@ export class HSRDesc {
         //for each layer
         console.time("HSRDesc.createUVsToHits.layers")
         for (const layer of this.layers) {
+            const index = this.layers.indexOf(layer)
+            const isTransparent = this.layerTransparent ? this.layerTransparent[index] : false
+
             const cacheId = `${layer.mesh}-${layer.reference}-${layer.cage}`
 
-            const cacheEntry = CACHE_uvToHits.get(cacheId)
+            const cacheEntry = FLAGS.CACHE_HSR_HITS ? CACHE_uvToHits.get(cacheId) : undefined
 
             const latestUvToHitsMap = cacheEntry ? cacheEntry : new Map<number,number>()
 
-            if (!cacheEntry) {
+            if (!cacheEntry && !isTransparent) {
                 const cage = meshMap.get(layer.cage)
                 const reference = meshMap.get(layer.reference)
                 const mesh = layer.mesh ? meshMap.get(layer.mesh) : undefined

@@ -33,6 +33,9 @@ export const FLAGS: {
     ENABLE_HSR: boolean,
     HSR_SHOW_RAY: boolean,
     HIDE_LAYERED_CLOTHING: boolean,
+    HSR_RAY_COUNT: number,
+    HSR_RAY_LENGTH: number,
+    CACHE_HSR_HITS: boolean,
 
     SEARCH_FOR_STRING: string | undefined,
     LOAD_TEST_PLACE: string | undefined,
@@ -77,6 +80,9 @@ export const FLAGS: {
     ENABLE_HSR: true,
     HSR_SHOW_RAY: false,
     HIDE_LAYERED_CLOTHING: false,
+    HSR_RAY_COUNT: 3,
+    HSR_RAY_LENGTH: 0.5,
+    CACHE_HSR_HITS: true,
 
     //debug
     SEARCH_FOR_STRING: undefined, //"requestparams" //"looks/" //this is useful if you want to find api endpoints
