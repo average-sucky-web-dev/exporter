@@ -89,7 +89,7 @@ export const FLAGS: {
     HSR_SHOW_RAY: false,
     HIDE_LAYERED_CLOTHING: false,
     HSR_RAY_COUNT: 3,
-    HSR_RAY_LENGTH: 0.5,
+    HSR_RAY_LENGTH: 0.4,
     CACHE_HSR_HITS: true,
 
     //debug
