@@ -608,18 +608,18 @@ export class MaterialDesc {
         }
 
         //set transparent to false if color layer has no transparent pixels
-        const imageData = ctx.getImageData(0,0, canvas.width, canvas.height)
-        const data = imageData.data
-        
         let hasTransparency = false
-        for (let i = 3; i < data.length; i += 4) {
-            if (data[i] < 255) {
-                hasTransparency = true
-                break
-            }
-        }
+        if (this.transparent) {
+            const imageData = ctx.getImageData(0,0, canvas.width, canvas.height)
+            const data = imageData.data
 
-        if (!this.transparent) {
+            for (let i = 3; i < data.length; i += 4) {
+                if (data[i] < 255) {
+                    hasTransparency = true
+                    break
+                }
+            }
+        } else {
             hasTransparency = false
         }
 
@@ -1043,7 +1043,7 @@ export class MaterialDesc {
         }
 
         //clothing
-        if (affectedByHumanoid && child.parent) {
+        if (affectedByHumanoid && child.parent && !surfaceAppearance) {
             const bodyPart = BodyPartNameToEnum[child.Prop("Name") as string]
             if (Object.hasOwn(BodyPartNameToEnum, child.Prop("Name") as string)) {
                 this.bodyPart = bodyPart
