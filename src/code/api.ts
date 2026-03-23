@@ -143,6 +143,28 @@ async function RBLXPatch(url: string, auth: Authentication, body: any, attempt =
     return RBLXPost(url, auth, body, attempt, "PATCH")
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function getAssetBufferInternal(url: string, headers: any) {
+    API.Misc.startCurrentlyLoadingAssets()
+    const fetchStr = await API.Misc.assetURLToCDNURL(url, headers)
+    if (fetchStr instanceof Response) {
+        API.Misc.stopCurrentlyLoadingAssets()
+        return fetchStr
+    }
+
+    const response = await RBLXGet(fetchStr, undefined, false)
+    API.Misc.stopCurrentlyLoadingAssets()
+    if (response.status === 200) {
+        const data = await response.arrayBuffer()
+        /*if (FLAGS.ENABLE_API_CACHE) {
+            CACHE.AssetBuffer.set(cacheStr, data)
+        }*/
+        return data
+    } else {
+        return response
+    }
+}
+
 let isCurrentlyLoading = false
 let currentlyLoadingAssets = 0
 
@@ -157,7 +179,7 @@ function _updateCurrentlyLoadingAssets() {
 type UserInfo = {id: number, name: string, displayName: string}
 
 const CACHE = {
-    "AssetBuffer": new Map<string,ArrayBuffer>(),
+    "AssetBuffer": new Map<string,Promise<Response | ArrayBuffer>>(),
     "RBX": new Map<string,RBX>(),
     "Mesh": new Map<string,FileMesh>(),
     "Image": new Map<string,Promise<HTMLImageElement | undefined> | HTMLImageElement | undefined>(),
@@ -650,24 +672,17 @@ export const API = {
             if (cachedBuffer) {
                 return cachedBuffer
             } else {
-                API.Misc.startCurrentlyLoadingAssets()
-                const fetchStr = await API.Misc.assetURLToCDNURL(url, headers)
-                if (fetchStr instanceof Response) {
-                    API.Misc.stopCurrentlyLoadingAssets()
-                    return fetchStr
+                const promise = new Promise<ArrayBuffer | Response>((resolve) => {
+                    getAssetBufferInternal(url, headers).then((result) => {
+                        resolve(result)
+                    })
+                })
+
+                if (FLAGS.ENABLE_API_CACHE) {
+                    CACHE.AssetBuffer.set(cacheStr, promise)
                 }
 
-                const response = await RBLXGet(fetchStr, undefined, false)
-                API.Misc.stopCurrentlyLoadingAssets()
-                if (response.status === 200) {
-                    const data = await response.arrayBuffer()
-                    if (FLAGS.ENABLE_API_CACHE) {
-                        CACHE.AssetBuffer.set(cacheStr, data)
-                    }
-                    return data
-                } else {
-                    return response
-                }
+                return promise
             }
         },
         GetRBX: async function(url: string, headers?: HeadersInit): Promise<Response | RBX> {
