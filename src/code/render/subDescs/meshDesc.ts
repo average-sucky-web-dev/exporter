@@ -716,6 +716,7 @@ export class MeshDesc {
         }
         threeMesh.castShadow = true
         threeMesh.geometry = geometry
+        threeMesh.name = this.instance?.PropOrDefault("Name", "Mesh") as string
 
         threeMesh.scale.set(mesh.size[0], mesh.size[1], mesh.size[2])
         /*
