@@ -406,7 +406,9 @@ export class RBFDeformerPatch {
                 bz[i] = dr[2] - rr[2]
             }
 
-            weightPromises[p] = WorkerPool.instance.work("patchRBF", [A.map(r => r.buffer), bx.buffer, by.buffer, bz.buffer]) as Promise<ArrayBuffer>
+            const Abuffers = A.map(r => r.buffer)
+
+            weightPromises[p] = WorkerPool.instance.work("patchRBF", [Abuffers, bx.buffer, by.buffer, bz.buffer], [...Abuffers, bx.buffer, by.buffer, bz.buffer]) as Promise<ArrayBuffer>
         }
         //console.timeEnd(`RBFDeformerPatch.solve.weightsPromise.${this.id}`);
 

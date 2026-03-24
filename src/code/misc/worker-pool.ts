@@ -71,7 +71,7 @@ export class WorkerPool {
         return func(data)
     }
 
-    async work(type: string, data: unknown): Promise<unknown> {
+    async work(type: string, data: unknown, transferables?: Transferable[]): Promise<unknown> {
         const taskId = idCounter
         idCounter += 1
 
@@ -82,7 +82,11 @@ export class WorkerPool {
             const promise = new Promise((resolve) => {
                 this.workersResolves[workerIndex].push([taskId, resolve])
             })
-            this.workers[workerIndex].postMessage([taskId, type, data])
+            if (transferables) {
+                this.workers[workerIndex].postMessage([taskId, type, data], transferables)
+            } else {
+                this.workers[workerIndex].postMessage([taskId, type, data])
+            }
             //console.log("Sent worker message", [taskId, type, data])
             return promise
         } else { //emulate worker
