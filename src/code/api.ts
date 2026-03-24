@@ -2,7 +2,7 @@ import type { AvatarInventory_Result, BundleDetails_Result, GetSubscription_Resu
 import { OutfitOrigin } from "./avatar/constant"
 import { LocalOutfit, type LocalOutfitJson } from "./avatar/local-outfit"
 import { BodyColors, Outfit } from "./avatar/outfit"
-import type { ItemSort } from "./avatar/sorts"
+import { ItemSort } from "./avatar/sorts"
 import { generateUUIDv4 } from "./misc/misc"
 import { FileMesh } from "./mesh/mesh"
 import { Event, RBX } from "./rblx/rbx"
@@ -501,6 +501,11 @@ export const API = {
             } else {
                 return response
             }
+        },
+        GetHeadShapes: async function(pageToken: string | null | undefined): Promise<AvatarInventory_Result | Response> {
+            const itemSort = new ItemSort(0, "HeadShape")
+            
+            return API.Avatar.GetAvatarInventory("recentAdded", pageToken, [itemSort])
         },
         GetAvatarInventory: async function (sortOption: string, pageToken: string | null | undefined, itemInfos: ItemSort[] = []): Promise<AvatarInventory_Result | Response> {
             let requestUrl = "https://avatar.roblox.com/v1/avatar-inventory?"
