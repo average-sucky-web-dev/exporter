@@ -503,9 +503,9 @@ export const API = {
             }
         },
         GetHeadShapes: async function(pageToken: string | null | undefined): Promise<AvatarInventory_Result | Response> {
-            const itemSort = new ItemSort(0, "HeadShape")
+            const itemSort = new ItemSort(1, "headshape")
             
-            return API.Avatar.GetAvatarInventory("recentAdded", pageToken, [itemSort])
+            return API.Avatar.GetAvatarInventory("1", pageToken, [itemSort])
         },
         GetAvatarInventory: async function (sortOption: string, pageToken: string | null | undefined, itemInfos: ItemSort[] = []): Promise<AvatarInventory_Result | Response> {
             let requestUrl = "https://avatar.roblox.com/v1/avatar-inventory?"
