@@ -10,7 +10,7 @@ import { FLAGS } from "../../misc/flags";
 import { hexToColor3, hexToRgb } from "../../misc/misc";
 import { AnimationTrack } from "../animation";
 import { delta_CIEDE2000 } from "../color-similarity";
-import { AccessoryType, AllAnimations, AllBodyParts, AnimationPropToName, animNamesR15, animNamesR6, AssetTypeToAccessoryType, AssetTypeToMakeupType, BodyPart, BodyPartEnumToNames, DataType, HumanoidRigType, NeverLayeredAccessoryTypes, type AnimationProp } from "../constant";
+import { AccessoryType, AllAnimations, AllBodyParts, AnimationPropToName, animNamesR15, animNamesR6, AssetTypeToAccessoryType, AssetTypeToMakeupType, BodyPart, BodyPartEnumToNames, DataType, HumanoidRigType, MeshType, NeverLayeredAccessoryTypes, type AnimationProp } from "../constant";
 import { CFrame, Color3, hasSameVal, hasSameValFloat, Instance, isSameColor, isSameVector3, Property, RBX, Vector3 } from "../rbx";
 import { replaceBodyPart, ScaleAccessory, ScaleCharacter, type RigData } from "../scale";
 import { AccessoryDescriptionWrapper } from "./AccessoryDescription";
@@ -20,7 +20,7 @@ import { InstanceWrapper } from "./InstanceWrapper";
 import { MakeupDescriptionWrapper } from "./MakeupDescription";
 
 type ClothingDiffType = "Shirt" | "Pants" | "GraphicTShirt"
-type HumanoidDescriptionDiff = "scale" | "bodyColor" | "animation" | "bodyPart" | "clothing" | "face" | "accessory" | "makeup" | "gear"
+type HumanoidDescriptionDiff = "scale" | "bodyColor" | "animation" | "bodyPart" | "clothing" | "face" | "accessory" | "makeup" | "gear" | "staticFacialAnimation"
 
 function isSameAccessoryDesc(desc0: Instance, desc1: Instance) {
     return hasSameVal(desc0, desc1, "AssetId") &&
@@ -57,6 +57,7 @@ export class HumanoidDescriptionWrapper extends InstanceWrapper {
         "RunAnimation",
         "SwimAnimation",
         "WalkAnimation",
+        "StaticFacialAnimation",
         "GraphicTShirt",
         "Pants",
         "Shirt",
@@ -89,6 +90,7 @@ export class HumanoidDescriptionWrapper extends InstanceWrapper {
         if (!this.instance.HasProperty("RunAnimation")) this.instance.addProperty(new Property("RunAnimation", DataType.Int64), 0n)
         if (!this.instance.HasProperty("SwimAnimation")) this.instance.addProperty(new Property("SwimAnimation", DataType.Int64), 0n)
         if (!this.instance.HasProperty("WalkAnimation")) this.instance.addProperty(new Property("WalkAnimation", DataType.Int64), 0n)
+        if (!this.instance.HasProperty("StaticFacialAnimation")) this.instance.addProperty(new Property("StaticFacialAnimation", DataType.Bool), false)
 
         // CLOTHES
         if (!this.instance.HasProperty("GraphicTShirt")) this.instance.addProperty(new Property("GraphicTShirt", DataType.Int64), 0n)
@@ -175,12 +177,15 @@ export class HumanoidDescriptionWrapper extends InstanceWrapper {
         // BODY COLORS & BODY PARTS
         let bodyColorsSame = true
         let bodyPartsSame = true
-        
+
         for (const bodyPart of AllBodyParts) {
             if (!isSameColor(this.getBodyPartColor(bodyPart), originalW.getBodyPartColor(bodyPart))) {
                 bodyColorsSame = false
             }
             if (this.getBodyPartId(bodyPart) !== originalW.getBodyPartId(bodyPart)) {
+                bodyPartsSame = false
+            }
+            if (this.getBodyPartHeadShape(bodyPart) !== originalW.getBodyPartHeadShape(bodyPart)) {
                 bodyPartsSame = false
             }
         }
@@ -190,6 +195,9 @@ export class HumanoidDescriptionWrapper extends InstanceWrapper {
         }
         if (!bodyPartsSame) {
             diffs.push("bodyPart")
+        }
+        if (this.instance.Prop("StaticFacialAnimation") !== originalW.instance.Prop("StaticFacialAnimation")) {
+            diffs.push("staticFacialAnimation")
         }
 
         // CLOTHING
@@ -405,6 +413,13 @@ export class HumanoidDescriptionWrapper extends InstanceWrapper {
         }
     }
 
+    setBodyPartHeadShape(bodyPart: number, headShape: string) {
+        const bodyPartDesc = this.getBodyPartDescription(bodyPart)
+        if (bodyPartDesc) {
+            bodyPartDesc.setProperty("HeadShape", headShape)
+        }
+    }
+
     getBodyPartId(bodyPart: number): bigint {
         const bodyPartDesc = this.getBodyPartDescription(bodyPart)
         if (bodyPartDesc) {
@@ -412,6 +427,15 @@ export class HumanoidDescriptionWrapper extends InstanceWrapper {
         }
 
         return 0n
+    }
+
+    getBodyPartHeadShape(bodyPart: number): string {
+        const bodyPartDesc = this.getBodyPartDescription(bodyPart)
+        if (bodyPartDesc) {
+            return bodyPartDesc.Prop("HeadShape") as string
+        }
+
+        return ""
     }
 
     createRigData(): RigData | undefined {
@@ -570,6 +594,10 @@ export class HumanoidDescriptionWrapper extends InstanceWrapper {
                 }
             }*/
 
+            if (asset.meta?.staticFacialAnimation) {
+                this.instance.setProperty("StaticFacialAnimation", true)
+            }
+
             switch (assetType) {
                     case "TShirt":
                         this.instance.setProperty("GraphicTShirt", BigInt(asset.id))
@@ -675,6 +703,9 @@ export class HumanoidDescriptionWrapper extends InstanceWrapper {
 
                             const bodyPart = BodyPart[bodyPartName]
                             this.setBodyPartId(bodyPart, BigInt(asset.id))
+                            if (asset.meta?.headShape && assetType === "DynamicHead") {
+                                this.setBodyPartHeadShape(bodyPart, asset.meta?.headShape)
+                            }
                         }
                         break
                     case "ClimbAnimation":
@@ -836,8 +867,19 @@ export class HumanoidDescriptionWrapper extends InstanceWrapper {
                         headers = {"Roblox-AssetFormat":"avatar_meshpart_head"}
                     }
 
+                    const headShape = this.getBodyPartHeadShape(BodyPart.Head)
+                    
+                    let contentRepresentationPriorityList = undefined
+                    if (bodyPart === BodyPart.Head && headShape.length > 0) {
+                        contentRepresentationPriorityList = [{"format":headShape,"majorVersion":"1"}]
+                        if (avatarType === AvatarType.R15) {
+                            contentRepresentationPriorityList.push({"format":"avatar_meshpart_head","majorVersion":"1"})
+                        }
+                        headers = undefined
+                    }
+
                     //get body part
-                    API.Asset.GetRBX(`rbxassetid://${assetId}`, headers).then(bodyPartRBX => {
+                    API.Asset.GetRBX(`rbxassetid://${assetId}`, headers, contentRepresentationPriorityList).then(bodyPartRBX => {
                         if (this.cancelApply) resolve(undefined)
                         if (!(bodyPartRBX instanceof RBX)) {
                             resolve(bodyPartRBX)
@@ -893,6 +935,19 @@ export class HumanoidDescriptionWrapper extends InstanceWrapper {
                                         }
 
                                         headMesh.setParent(rig.FindFirstChild("Head"))
+                                    } else {
+                                        const headMesh = dataModel.FindFirstChildOfClass("MeshPart")
+                                        if (headMesh) {
+                                            const bodyHeadMesh = rig.FindFirstChild("Head")?.FindFirstChildOfClass("SpecialMesh")
+                                            if (bodyHeadMesh) {
+                                                bodyHeadMesh.setProperty("MeshType", MeshType.FileMesh)
+                                                bodyHeadMesh.setProperty("MeshId", headMesh.Prop("MeshId"))
+                                                bodyHeadMesh.setProperty("TextureId", headMesh.Prop("TextureID"))
+                                                bodyHeadMesh.setProperty("Scale", new Vector3(1,1,1))
+                                                bodyHeadMesh.setProperty("Offset", new Vector3(0,0,0))
+                                                bodyHeadMesh.setProperty("VertexColor", new Vector3(1,1,1))
+                                            }
+                                        }
                                     }
                                 } else { //r15
                                     const head = dataModel.FindFirstChildOfClass("MeshPart")
@@ -1324,7 +1379,8 @@ export class HumanoidDescriptionWrapper extends InstanceWrapper {
             return undefined
         }
 
-        if (!rig.FindFirstChild("Head")) {
+        const head = rig.FindFirstChild("Head")
+        if (!head) {
             return undefined
         }
 
@@ -1334,8 +1390,8 @@ export class HumanoidDescriptionWrapper extends InstanceWrapper {
 
         // remove old makeup
         if (!originalW) {
-            for (const makeup of rig.GetChildren()) {
-                if (makeup.className === "Decal" && makeup.GetChildren().length > 0) {
+            for (const makeup of head.GetChildren()) {
+                if (makeup.className === "Decal" && makeup.FindFirstChildOfClass("WrapTextureTransfer")) {
                     makeup.Destroy()
                 }
             }
@@ -1394,7 +1450,6 @@ export class HumanoidDescriptionWrapper extends InstanceWrapper {
         }
 
         //update order for layered clothing
-        const head = rig.FindFirstChild("Head")
         if (head) {
             for (const decal of head.GetChildren()) {
                 if (decal.className === "Decal" && decal.GetChildren().length > 0) {
@@ -1603,7 +1658,7 @@ export class HumanoidDescriptionWrapper extends InstanceWrapper {
             if (diffs.includes("bodyPart")) {
                 const toChange = []
                 for (const bodyPart of AllBodyParts) {
-                    if (this.getBodyPartId(bodyPart) !== originalDescriptionW.getBodyPartId(bodyPart)) {
+                    if (this.getBodyPartId(bodyPart) !== originalDescriptionW.getBodyPartId(bodyPart) || this.getBodyPartHeadShape(bodyPart) !== originalDescriptionW.getBodyPartHeadShape(bodyPart)) {
                         toChange.push(bodyPart)
                     }
                 }

@@ -1,6 +1,6 @@
 //Dependencies: asset.js
 
-import { API } from "../api";
+import { API, Authentication } from "../api";
 import type { Look_Result } from "../api-constant";
 import SimpleView from "../lib/simple-view";
 import { FLAGS } from "../misc/flags";
@@ -967,7 +967,7 @@ export class Outfit {
         }
     }
 
-    addAsset(id: number, type: string | number, name: string) {
+    addAsset(id: number, type: string | number, name: string, supportsHeadShapes?: boolean) {
         if (this.containsAsset(id)) {
             return
         }
@@ -996,6 +996,9 @@ export class Outfit {
         const asset = new Asset()
         asset.id = id
         asset.name = name
+        if (supportsHeadShapes !== undefined) {
+            asset.supportsHeadShapes = supportsHeadShapes
+        }
 
         asset.assetType = new AssetType()
         asset.assetType.id = typeId
@@ -1045,20 +1048,16 @@ export class Outfit {
         return order
     }
 
-    async addAssetId(assetId: number): Promise<boolean> {
-        const assetDetailsResponse = await API.Economy.GetAssetDetails(assetId)
+    async addAssetId(assetId: number, auth: Authentication): Promise<boolean> {
+        const assetDetailsResponse = await API.Catalog.GetItemDetails(auth, [{itemType: "Asset", id: assetId}])
 
-        if (assetDetailsResponse.status !== 200) {
+        if (assetDetailsResponse instanceof Response) {
             return false
         }
 
-        const assetDetails = await assetDetailsResponse.json()
+        const assetDetails = assetDetailsResponse
 
-        if (assetDetails.errors) {
-            return false
-        }
-
-        this.addAsset(assetId, assetDetails.AssetTypeId, assetDetails.Name)
+        this.addAsset(assetId, assetDetails.data[0].assetType, assetDetails.data[0].name, assetDetails.data[0].supportsHeadShapes)
 
         /*const asset = new Asset()
         asset.id = assetId
@@ -1088,7 +1087,7 @@ export class Outfit {
                     const result = await API.Avatar.GetOutfitDetails(item.id, this.creatorId || 1)
                     if (result instanceof Outfit) {
                         for (const asset of result.assets) {
-                            this.addAsset(asset.id, asset.assetType.id, asset.name)
+                            this.addAsset(asset.id, asset.assetType.id, asset.name, asset.supportsHeadShapes)
                         }
 
                         if (bundleType === "Character") {
@@ -1115,7 +1114,7 @@ export class Outfit {
         }
     }
 
-    async fromLook(look: Look_Result["look"]): Promise<boolean> {
+    async fromLook(look: Look_Result["look"], auth: Authentication): Promise<boolean> {
         //metadata
         this.origin = "Look"
         this.creatorId = look.curator.id
@@ -1134,9 +1133,21 @@ export class Outfit {
             if (item.itemType === "Asset" && item.assetType !== null) {
                 this.addAsset(item.id, item.assetType, item.name)
             } else if (item.itemType === "Bundle") {
+                const assetsList: {
+                    itemType: "Asset" | "Bundle";
+                    id: number;
+                }[] = []
                 for (const asset of item.assetsInBundle) {
-                    if (asset.isIncluded) {
-                        assetPromises.push(this.addAssetId(asset.id))
+                    assetsList.push({itemType: "Asset", id: asset.id})
+                }
+
+                const assetDetails = await API.Catalog.GetItemDetails(auth, assetsList)
+
+                if (assetDetails instanceof Response) {
+                    return false
+                } else {
+                    for (const assetDetail of assetDetails.data) {
+                        this.addAsset(assetDetail.id, assetDetail.assetType, assetDetail.name, assetDetail.supportsHeadShapes)
                     }
                 }
             }
@@ -1162,7 +1173,7 @@ export class Outfit {
         return true
     }
 
-    async fromBuffer(buffer: ArrayBuffer) {
+    async fromBuffer(buffer: ArrayBuffer, auth: Authentication): Promise<Response | Outfit> {
         const view = new SimpleView(buffer)
 
         //flags
@@ -1202,6 +1213,7 @@ export class Outfit {
         }
 
         //assets
+        const assetsToAdd: Partial<Asset>[] = []
         const assetPromises: Promise<undefined>[] = []
 
         while (view.viewOffset < view.buffer.byteLength) {
@@ -1253,9 +1265,16 @@ export class Outfit {
             }
 
             //headshape
-            let assetHeadShape: number | undefined = undefined
+            /*let assetHeadShape: number | undefined = undefined
             if (flags & 32) {
                 assetHeadShape = Number(view.readUint64())
+            }*/
+            if (flags & 32) {
+                view.readUint64()
+            }
+            let assetHeadShape: string | undefined = undefined
+            if (flags & 128) {
+                assetHeadShape = view.readUtf8String()
             }
 
             //staticfacialanimation
@@ -1264,8 +1283,8 @@ export class Outfit {
                 staticFacialAnimation = true
             }
 
-            assetPromises.push(new Promise((resolve) => {
-                this.addAssetId(id).then(() => {
+            /*assetPromises.push(new Promise((resolve) => {
+                this.addAssetId(id, auth).then(() => {
                     let asset: Asset | undefined = undefined
                     for (const assetIn of this.assets) {
                         if (assetIn.id === id) {
@@ -1285,8 +1304,54 @@ export class Outfit {
 
                     resolve(undefined)
                 })
-            }))
-            
+            }))*/
+            let meta = undefined
+            if ((assetOrder || assetPos || assetRot || assetScale || assetHeadShape !== undefined)) {
+                meta = new AssetMeta()
+                meta.order = assetOrder
+                meta.position = assetPos
+                meta.rotation = assetRot
+                meta.scale = assetScale
+                meta.headShape = assetHeadShape
+                meta.staticFacialAnimation = staticFacialAnimation
+            }
+
+            assetsToAdd.push({
+                id: id,
+                meta: meta,
+            })
+        }
+
+        //get asset details
+        const assetDetailsRequest: {
+            itemType: "Asset" | "Bundle";
+            id: number;
+        }[] = []
+        for (const assetToAdd of assetsToAdd) {
+            assetDetailsRequest.push({itemType: "Asset", id: assetToAdd.id!})
+        }
+        const assetDetails = await API.Catalog.GetItemDetails(auth, assetDetailsRequest)
+        if (assetDetails instanceof Response) {
+            return assetDetails
+        }
+
+        //add assets
+        for (const assetDetail of assetDetails.data) {
+            this.addAsset(assetDetail.id, assetDetail.assetType, assetDetail.name, assetDetail.supportsHeadShapes)
+        }
+
+        //add asset meta
+        for (const assetToAdd of assetsToAdd) {
+            let asset: Asset | undefined = undefined
+            for (const assetIn of this.assets) {
+                if (assetIn.id === assetToAdd.id) {
+                    asset = assetIn
+                }
+            }
+
+            if (asset) {
+                asset.meta = assetToAdd.meta
+            }
         }
 
         await Promise.all(assetPromises)
@@ -1337,7 +1402,7 @@ export class Outfit {
             if (pos) bufferSize += 3
             if (rot) bufferSize += 3
             if (scale) bufferSize += 3
-            if (headShape !== undefined) bufferSize += 8
+            if (headShape !== undefined) bufferSize += 4 + headShape.length
         }
 
         //create buffer
@@ -1424,8 +1489,9 @@ export class Outfit {
             if (rot) flags += 4
             if (scale) flags += 8
             if (idIs64bit) flags += 16
-            if (headShape !== undefined) flags += 32
+            //if (headShape !== undefined) flags += 32
             if (asset.meta?.staticFacialAnimation) flags += 64
+            if (headShape) flags += 128
 
             view.writeUint8(flags)
 
@@ -1457,8 +1523,11 @@ export class Outfit {
                 view.writeUint8(Math.floor(mapNum(scale.Z, 0.5,2, 0,255)))
             }
 
-            if (headShape !== undefined) {
+            /*if (headShape !== undefined) {
                 view.writeUint64(BigInt(headShape))
+            }*/
+            if (headShape) {
+                view.writeUtf8String(headShape)
             }
         }
 

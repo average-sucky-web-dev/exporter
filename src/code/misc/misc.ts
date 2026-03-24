@@ -314,4 +314,8 @@ export class RNG {
     }
 }
 
+export function cleanString(inputString: string) {
+    return inputString.replace("'","").replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '');
+}
+
 export { download, saveByteArray, generateUUIDv4, rad, deg, lerp, lerpVec3, specialClamp, mapNum, clonePrimitiveArray, rotationMatrixToEulerAngles, hexToRgb, hexToColor3 }

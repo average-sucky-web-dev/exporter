@@ -17,7 +17,7 @@ type AssetMetaJson = {
     scale?: VecXYZ | Vecxyz | null,
     order?: number | null
     puffiness?: number | null
-    headShape?: "Invalid" | number
+    headShape?: "Invalid" | string | number
     staticFacialAnimation?: boolean
 }
 
@@ -311,12 +311,15 @@ export class ItemInfo {
     price?: number
     limitedType?: "Limited" | "LimitedUnique"
     offsale?: boolean
+    supportsHeadShapes?: boolean
+    headShape?: string
     
-    constructor(itemType: ItemType, type: string, id: number | string, name: string) {
+    constructor(itemType: ItemType, type: string, id: number | string, name: string, supportsHeadShapes?: boolean) {
         this.itemType = itemType
         this.type = type
         this.id = id
         this.name = name
+        this.supportsHeadShapes = supportsHeadShapes
     }
 }
 
@@ -374,7 +377,7 @@ class AssetMeta {
     rotation?: VecXYZ
     scale?: VecXYZ
 
-    headShape?: number
+    headShape?: string
     staticFacialAnimation?: boolean
 
     constructor() {
@@ -387,6 +390,7 @@ class AssetMeta {
         copy.order = this.order
         copy.puffiness = this.puffiness
         copy.headShape = this.headShape
+        copy.staticFacialAnimation = this.staticFacialAnimation
 
         if (this.position) copy.position = cloneVecXYZ(this.position)
         if (this.rotation) copy.rotation = cloneVecXYZ(this.rotation)
@@ -444,12 +448,10 @@ class AssetMeta {
         }
 
         if (assetMetaJson.headShape && assetMetaJson.headShape !== "Invalid") {
-            this.headShape = assetMetaJson.headShape
+            this.headShape = String(assetMetaJson.headShape)
         }
 
-        if (assetMetaJson.staticFacialAnimation) {
-            this.staticFacialAnimation = assetMetaJson.staticFacialAnimation
-        }
+        this.staticFacialAnimation = assetMetaJson.staticFacialAnimation
     }
 }
 

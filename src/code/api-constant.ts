@@ -171,7 +171,8 @@ export interface BundleDetails_Result {
         id: number,
         name: string,
         owned: boolean,
-        type: "Asset" | "UserOutfit"
+        type: "Asset" | "UserOutfit",
+        supportsHeadShapes?: boolean
     }[],
     collectibleItemId: string,
     creatorHasVerifiedBadge: boolean,
@@ -287,6 +288,7 @@ export interface ItemDetail_Result {
     name: string,
     offsaleDeadline: null,
     saleLocationType: SaleLocationType,
+    supportsHeadShapes?: boolean,
     taxonomy: {
         taxonomyId: string,
         taxonomyName: string,

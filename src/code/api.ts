@@ -144,9 +144,10 @@ async function RBLXPatch(url: string, auth: Authentication, body: any, attempt =
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function getAssetBufferInternal(url: string, headers: any) {
+async function getAssetBufferInternal(url: string, headers: any, extraStr?: string) {
     API.Misc.startCurrentlyLoadingAssets()
-    const fetchStr = await API.Misc.assetURLToCDNURL(url, headers)
+
+    const fetchStr = await API.Misc.assetURLToCDNURL(url, headers, extraStr)
     if (fetchStr instanceof Response) {
         API.Misc.stopCurrentlyLoadingAssets()
         return fetchStr
@@ -222,6 +223,7 @@ type ThumbnailInfo = {
     resolves: ((url: string | undefined) => void)[],
     attempt: number,
     lastTryTimestamp: number,
+    headShape?: string,
 }
 let ThumbnailsToBatch: ThumbnailInfo[] = []
 
@@ -294,11 +296,14 @@ export const API = {
             }
         },
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        "assetURLToCDNURL": async function(url: string | number | bigint, headers?: any): Promise<string | Response> {
+        "assetURLToCDNURL": async function(url: string | number | bigint, headers?: any, extraStr?: string): Promise<string | Response> {
             url = String(url)
-            if (url.includes("rbxcdn.com")) return url
+            if (url.includes("rbxcdn.com")) return extraStr ? url + extraStr : url
 
-            const fetchStr = API.Misc.parseAssetString(url) || url
+            let fetchStr = API.Misc.parseAssetString(url) || url
+            if (extraStr) {
+                fetchStr += extraStr
+            }
             const cdnURL = await API.Misc.getCDNURLFromAssetDelivery(fetchStr, headers)
             return cdnURL
         }
@@ -667,10 +672,13 @@ export const API = {
         },
     },
     "Asset": {
-        GetAssetBuffer: async function(url: string, headers?: HeadersInit): Promise<Response | ArrayBuffer> {
+        GetAssetBuffer: async function(url: string, headers?: HeadersInit, extraStr?: string): Promise<Response | ArrayBuffer> {
             let cacheStr = API.Misc.parseAssetString(url) || url
             if (headers) {
                 cacheStr += JSON.stringify(headers)
+            }
+            if (extraStr) {
+                cacheStr += extraStr
             }
 
             const cachedBuffer = CACHE.AssetBuffer.get(cacheStr)
@@ -678,7 +686,7 @@ export const API = {
                 return cachedBuffer
             } else {
                 const promise = new Promise<ArrayBuffer | Response>((resolve) => {
-                    getAssetBufferInternal(url, headers).then((result) => {
+                    getAssetBufferInternal(url, headers, extraStr).then((result) => {
                         resolve(result)
                     })
                 })
@@ -690,19 +698,29 @@ export const API = {
                 return promise
             }
         },
-        GetRBX: async function(url: string, headers?: HeadersInit): Promise<Response | RBX> {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        GetRBX: async function(url: string, headers?: HeadersInit, contentRepresentationPriorityList?: any): Promise<Response | RBX> {
             const fetchStr = url
 
             let cacheStr = fetchStr
             if (headers) {
                 cacheStr += JSON.stringify(headers)
             }
+            const contentRepresentationPriorityListBASE64 = contentRepresentationPriorityList ? btoa(JSON.stringify(contentRepresentationPriorityList)) : undefined
+            if (contentRepresentationPriorityListBASE64) {
+                cacheStr += contentRepresentationPriorityListBASE64
+            }
 
             const cachedRBX = CACHE.RBX.get(cacheStr)
             if (cachedRBX) {
                 return cachedRBX.clone()
             } else {
-                const response = await this.GetAssetBuffer(fetchStr, headers)
+                let extraStr = ""
+                if (contentRepresentationPriorityListBASE64) {
+                    extraStr += `&contentRepresentationPriorityList=${contentRepresentationPriorityListBASE64}`
+                }
+
+                const response = await this.GetAssetBuffer(fetchStr, headers, extraStr)
                 if (response instanceof ArrayBuffer) {
                     const buffer = response
                     const rbx = new RBX()
@@ -959,7 +977,7 @@ export const API = {
         }
     },
     "Thumbnails": {
-        GetThumbnail: function(auth: Authentication, type: string, id: number | string, size: string = "150x150"): Promise<string | undefined> {
+        GetThumbnail: function(auth: Authentication, type: string, id: number | string, size: string = "150x150", headShape?: string): Promise<string | undefined> {
             const thisThumbnailInfo: ThumbnailInfo = {
                 auth: auth,
                 type: type,
@@ -968,6 +986,7 @@ export const API = {
                 attempt: 0,
                 resolves: [],
                 lastTryTimestamp: 0,
+                headShape: headShape,
             }
 
             const cachedThumbnail = CACHE.Thumbnails.get(requestIdFromThumbnailInfo(thisThumbnailInfo))
@@ -994,10 +1013,11 @@ export const API = {
                     resolves: [resolve],
                     attempt: 0,
                     lastTryTimestamp: 0,
+                    headShape: headShape,
                 })
             })
         },
-        UncacheThumbnail: function(type: string, id: number | string, size: string = "150x150") {
+        UncacheThumbnail: function(type: string, id: number | string, size: string = "150x150", headShape?: string) {
             const thisThumbnailInfo: ThumbnailInfo = {
                 auth: new Authentication(),
                 type: type,
@@ -1006,6 +1026,7 @@ export const API = {
                 attempt: 0,
                 resolves: [],
                 lastTryTimestamp: 0,
+                headShape: headShape
             }
 
             CACHE.Thumbnails.delete(requestIdFromThumbnailInfo(thisThumbnailInfo))
@@ -1138,7 +1159,11 @@ export const API = {
 
 let currentLoadingThumbnails = false
 function requestIdFromThumbnailInfo(thumbnailInfo: ThumbnailInfo) {
-    return thumbnailInfo.id + ":undefined:" + thumbnailInfo.type + ":" + thumbnailInfo.size + ":webp:regular"
+    let requestId = thumbnailInfo.id + ":undefined:" + thumbnailInfo.type + ":" + thumbnailInfo.size + ":webp:regular"
+    if (thumbnailInfo.headShape) {
+        requestId += `:${thumbnailInfo.headShape}`
+    }
+    return requestId
 }
 
 function PurgeFailedThumbnails() {
@@ -1172,7 +1197,8 @@ function BatchThumbnails() {
             "requestId": requestIdFromThumbnailInfo(thumbnailInfo),
             "size": thumbnailInfo.size,
             "targetId": thumbnailInfo.id,
-            "type": thumbnailInfo.type
+            "type": thumbnailInfo.type,
+            "headShape": thumbnailInfo.headShape,
         })
 
         auth = thumbnailInfo.auth

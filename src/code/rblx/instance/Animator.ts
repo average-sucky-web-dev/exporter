@@ -305,6 +305,11 @@ export class AnimatorWrapper extends InstanceWrapper {
     }
 
     renderAnimation(addTime: number = 1 / 60) {
+        const humanoid = this.instance.parent
+        if (!humanoid) {
+            throw new Error("Parent is missing from Animator")
+        }
+
         this.restPose()
         this._fixUnloaded()
 
@@ -316,6 +321,13 @@ export class AnimatorWrapper extends InstanceWrapper {
             const looped = track.tick(addTime)
             if (this.data.currentAnimationTrack === track && looped && this.data.currentAnimation) {
                 this._switchAnimation(this.data.currentAnimation)
+            }
+        }
+
+        const humanoidDescription = humanoid.FindFirstChildOfClass("HumanoidDescription")
+        if (humanoidDescription) {
+            if (humanoidDescription.Prop("StaticFacialAnimation")) {
+                this.restPose(false, true)
             }
         }
 

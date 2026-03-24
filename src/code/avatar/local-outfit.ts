@@ -1,3 +1,4 @@
+import type { Authentication } from "../api";
 import { arrayBufferToBase64, base64ToArrayBuffer } from "../misc/misc"
 import { Outfit } from "./outfit"
 
@@ -59,13 +60,13 @@ export class LocalOutfit {
         this.image = undefined
     }
 
-    async toOutfit(): Promise<Outfit> {
+    async toOutfit(auth: Authentication): Promise<Outfit> {
         const outfit = new Outfit()
         outfit.name = this.name
         outfit.id = this.id
         outfit.creatorId = this.creator
 
-        await outfit.fromBuffer(base64ToArrayBuffer(this.buffer))
+        await outfit.fromBuffer(base64ToArrayBuffer(this.buffer), auth)
 
         return outfit
     }
