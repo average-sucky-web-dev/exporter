@@ -353,11 +353,11 @@ export class AnimatorWrapper extends InstanceWrapper {
 
 
         //const hasMood = this.data.currentMoodAnimation && this.data.currentMoodAnimation.length > 0
-        const isEmote = this.data.currentAnimation?.startsWith("emote.")
+        //const isEmote = this.data.currentAnimation?.startsWith("emote.")
 
-        if (isEmote) {
+        /*if (isEmote) {
             this.restPose(false, true)
-        }
+        }*/
 
         const rig = this.instance.parent?.parent
         if (rig) {
