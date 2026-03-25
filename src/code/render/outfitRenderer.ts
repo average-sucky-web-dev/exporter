@@ -231,11 +231,11 @@ export class OutfitRenderer {
                     }
 
                     //mood animation
-                    if (this.outfit.containsAssetType("MoodAnimation") && !name.startsWith("emote.")) {
+                    /*if (!name.startsWith("emote.")) {
                         animatorW.playAnimation("mood", "mood")
                     } else {
                         animatorW.stopMoodAnimation()
-                    }
+                    }*/
                 }
             }
         }

@@ -343,6 +343,9 @@ export const animNamesR15: AnimationSet = {
     toollunge: [
         { id: "http://www.roblox.com/asset/?id=522638767", weight: 10 }
     ],
+    mood: [
+        { id: "http://www.roblox.com/asset/?id=14366558676", weight: 10 }
+    ]
     /*wave: [
         { id: "http://www.roblox.com/asset/?id=507770239", weight: 10 }
     ],

@@ -336,8 +336,8 @@ export class AnimatorWrapper extends InstanceWrapper {
             if (!this.data.moodTracks.includes(track)) continue
 
             const looped = track.tick(addTime)
-            if (this.data.currentAnimationTrack === track && looped && this.data.currentAnimation) {
-                this._switchAnimation(this.data.currentAnimation)
+            if (this.data.currentMoodAnimationTrack === track && looped && this.data.currentMoodAnimation) {
+                this._switchMoodAnimation(this.data.currentMoodAnimation)
             }
         }
 
@@ -346,16 +346,16 @@ export class AnimatorWrapper extends InstanceWrapper {
             if (!this.data.toolTracks.includes(track)) continue
 
             const looped = track.tick(addTime)
-            if (this.data.currentAnimationTrack === track && looped && this.data.currentAnimation) {
-                this._switchAnimation(this.data.currentAnimation)
+            if (this.data.currentToolAnimationTrack === track && looped && this.data.currentToolAnimation) {
+                this._switchToolAnimation(this.data.currentToolAnimation)
             }
         }
 
 
-        const hasMood = this.data.currentMoodAnimation && this.data.currentMoodAnimation.length > 0
+        //const hasMood = this.data.currentMoodAnimation && this.data.currentMoodAnimation.length > 0
         const isEmote = this.data.currentAnimation?.startsWith("emote.")
 
-        if (!hasMood && !isEmote) {
+        if (isEmote) {
             this.restPose(false, true)
         }
 
