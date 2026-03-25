@@ -940,6 +940,10 @@ export const accessoryRefinementUpperBounds: typeof accessoryRefinementLowerBoun
     }
 }
 
+export const AllHeadShapes: string[] = [
+    "RobloxClassic", "Blockhead", "Cheeks", "Chiseled", "CoolThing", "EraserHead", "FatHead", "FlatTop", "GoldenKorbloxGeneral", "GoldenMrRobot", "KnightOfChivalry", "KnightOfCourage", "ManHead", "MercilessNinja", "Narrow", "Paragon", "Peabrain", "Perfection", "Roll", "Roundy", "RoxBox", "TheEngineer", "Trim", "WomanHead"
+]
+
 /*
 API.Avatar.GetAvatarRules().then((response: Response) => {
     if (response.status === 200) {
