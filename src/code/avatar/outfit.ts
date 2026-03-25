@@ -1057,7 +1057,11 @@ export class Outfit {
 
         const assetDetails = assetDetailsResponse
 
-        this.addAsset(assetId, assetDetails.data[0].assetType, assetDetails.data[0].name, assetDetails.data[0].supportsHeadShapes)
+        if (assetDetails.data.length > 0) {
+            this.addAsset(assetId, assetDetails.data[0].assetType, assetDetails.data[0].name, assetDetails.data[0].supportsHeadShapes)
+        } else {
+            return this.addAssetIdEconomy(assetId)
+        }
 
         /*const asset = new Asset()
         asset.id = assetId
@@ -1073,6 +1077,23 @@ export class Outfit {
 
         this.assets.push(asset)*/
 
+        return true
+    }
+
+    async addAssetIdEconomy(assetId: number): Promise<boolean> {
+        const assetDetailsResponse = await API.Economy.GetAssetDetails(assetId)
+
+        if (assetDetailsResponse.status !== 200) {
+            return false
+        }
+
+        const assetDetails = await assetDetailsResponse.json()
+
+        if (assetDetails.errors) {
+            return false
+        }
+
+        this.addAsset(assetId, assetDetails.AssetTypeId, assetDetails.Name)
         return true
     }
 
@@ -1360,6 +1381,19 @@ export class Outfit {
             this.addAsset(assetDetail.id, assetDetail.assetType, assetDetail.name, assetDetail.supportsHeadShapes)
         }
 
+        for (const asset of assetsToAdd) {
+            const assetId = asset.id
+            if (assetId && !this.getAssetId(assetId)) {
+                assetPromises.push(new Promise(resolve => {
+                    this.addAssetIdEconomy(assetId).then(() => {
+                        resolve(undefined)
+                    })
+                }))
+            }
+        }
+
+        await Promise.all(assetPromises)
+
         //add asset meta
         for (const assetToAdd of assetsToAdd) {
             let asset: Asset | undefined = undefined
@@ -1373,8 +1407,6 @@ export class Outfit {
                 asset.meta = assetToAdd.meta
             }
         }
-
-        await Promise.all(assetPromises)
 
         this.fixOrders()
 
