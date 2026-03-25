@@ -34,6 +34,10 @@ export class WorkerPool {
                 }
                 worker.onerror = (e: ErrorEvent) => {
                     console.warn(e)
+                    const index = this.workers.indexOf(worker)
+                    this.workers.splice(index, 1)
+                    this.workersActiveTasks.splice(index, 1)
+                    this.workersResolves.splice(index, 1)
                     throw new Error("Failed to create worker, try disabling workers by setting FLAGS.USE_WORKERS = false but do note doing so will degrade performance")
                 }
 
