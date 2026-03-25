@@ -1188,7 +1188,7 @@ function BatchThumbnails() {
     let auth: Authentication | undefined = undefined
     const body = []
     for (const thumbnailInfo of ThumbnailsToBatch) {
-        if (Date.now() / 1000 - thumbnailInfo.lastTryTimestamp < 1) {
+        if (Date.now() / 1000 - thumbnailInfo.lastTryTimestamp < 1 + thumbnailInfo.attempt) {
             continue
         }
 
