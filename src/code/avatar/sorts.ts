@@ -102,6 +102,7 @@ export const CategoryDictionary: { [K in string]: { [K in string]: { [K in strin
         },
         "Head": {
             "Dynamic Heads": new SortInfo([new ItemSort(2, "Outfit")]),
+            "Adjustment": new SpecialInfo("HeadAdjustment"),
             "Heads": new SortInfo([new ItemSort(17)], "inventory"),
             "Faces": new SortInfo([new ItemSort(18)], "inventory"),
         },

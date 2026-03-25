@@ -997,7 +997,7 @@ export const API = {
             }
             
             for (const thumbnailInfo of ThumbnailsToBatch) {
-                if (thumbnailInfo.id === id && thumbnailInfo.type === type && thumbnailInfo.size === size) {
+                if (requestIdFromThumbnailInfo(thumbnailInfo) === requestIdFromThumbnailInfo(thisThumbnailInfo)) {
                     return new Promise(resolve => {
                         thumbnailInfo.resolves.push(resolve)
                     })

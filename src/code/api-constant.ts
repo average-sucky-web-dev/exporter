@@ -223,6 +223,7 @@ export interface AvatarInventory_Result {
         },
         availabilityStatus: string,
         acquisitionTime: string,
+        headShape?: string,
         outfitDetail?: {
             assets: {
                 id: number
